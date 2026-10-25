@@ -1,0 +1,1948 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vet Rescue Trail</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Nunito:wght@600;800&display=swap">
+<style>
+/* Layout: full-screen painted world on canvas (land, sea, sky), paper-card overlays echoing the hand-drawn maps. Single bright theme by choice. */
+:root{
+  --sky:#6cb6e8; --ink:#2b2833; --paper:#ffffff; --red:#e8453c; --green:#3f9e4f;
+  --sun:#ffc93c; --blue:#3b6fd8; --sea:#1f86b8; --muted:#635d70; --wash:rgba(30,34,40,.42);
+  --display:'Gaegu','Comic Sans MS','Chalkboard SE',cursive;
+  --body:'Nunito',ui-rounded,system-ui,sans-serif;
+  color-scheme:light;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{background:var(--sky);color:var(--ink);font-family:var(--body);overflow:hidden;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+#app{position:relative;height:100%;overflow:hidden}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+
+/* HUD */
+.hud{position:absolute;top:10px;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;pointer-events:none}
+.chip{pointer-events:auto;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.92);border:2.5px solid var(--ink);
+  border-radius:14px 16px 13px 17px;padding:4px 10px;font-weight:800;font-size:16px;font-variant-numeric:tabular-nums;box-shadow:2px 3px 0 var(--ink)}
+.chip.icon{width:42px;height:38px;justify-content:center;padding:0;font-family:var(--display);font-size:22px}
+.bat{display:flex;gap:3px}
+.bat i{width:9px;height:16px;border:2px solid var(--ink);border-radius:3px;background:#e9e6ee}
+.bat i.on{background:var(--sun)}
+.sea .bat i.on{background:#7fd6ff}
+.kit{width:18px;height:14px;border-radius:3px;border:2px solid var(--ink);background:#fff;position:relative}
+.kit::before,.kit::after{content:"";position:absolute;background:var(--red);left:50%;top:50%;translate:-50% -50%}
+.kit::before{width:8px;height:2.5px}.kit::after{width:2.5px;height:8px}
+.prog{position:absolute;top:60px;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));
+  height:10px;border:2.5px solid var(--ink);border-radius:8px;background:rgba(255,255,255,.7);pointer-events:none}
+.prog div{height:100%;width:0;background:var(--green);border-radius:5px}
+.prog span{position:absolute;right:-2px;top:-25px;font-family:var(--display);font-weight:700;font-size:17px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+
+/* Controls */
+.ctrl{position:absolute;left:max(12px,env(safe-area-inset-left,0px));bottom:14px;display:flex;flex-direction:column;gap:10px}
+.ctrl button{width:58px;height:58px;border-radius:50%;border:3px solid var(--ink);background:rgba(255,255,255,.8);
+  font-size:24px;box-shadow:2px 3px 0 var(--ink)}
+.ctrl button:active{transform:translate(2px,3px);box-shadow:none}
+.ctrl.fly button{width:72px;height:72px;font-family:var(--display);font-weight:700;font-size:24px}
+
+/* Overlays */
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--wash);
+  padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));overflow-y:auto}
+.overlay.clear{background:linear-gradient(rgba(0,0,0,.05),rgba(0,0,0,.25))}
+.panel{width:100%;max-width:480px;margin:auto;background:var(--paper);border:3px solid var(--ink);border-radius:22px 28px 20px 26px;
+  box-shadow:5px 6px 0 var(--ink);padding:20px;display:flex;flex-direction:column;gap:12px;text-align:center}
+h1,h2{font-family:var(--display);font-weight:700;margin:0;line-height:1;text-wrap:balance}
+h1{font-size:clamp(44px,12vw,62px);color:var(--red)}
+h1 small{display:block;font-size:.45em;color:var(--ink);margin-top:4px}
+h2{font-size:34px}
+p{margin:0;line-height:1.45;font-size:16px}
+.muted{color:var(--muted);font-size:14px}
+.btn{border:3px solid var(--ink);border-radius:16px 18px 15px 19px;background:var(--sun);font-weight:800;font-size:19px;
+  padding:12px 18px;box-shadow:3px 4px 0 var(--ink)}
+.btn:active{transform:translate(3px,4px);box-shadow:none}
+.btn.alt{background:var(--paper)}
+.btn.go{background:#7fd37a}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.row > *{flex:1 1 120px}
+.seg{display:flex;border:3px solid var(--ink);border-radius:14px;overflow:hidden}
+.seg button{flex:1;border:0;background:var(--paper);padding:10px 6px;font-weight:800;font-size:15px}
+.seg button + button{border-left:3px solid var(--ink)}
+.seg button[aria-pressed="true"]{background:#a9dcf7}
+.label{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:left}
+
+/* World picker */
+.worlds{display:flex;flex-direction:column;gap:10px}
+.world{border:2.5px solid var(--ink);border-radius:16px;padding:10px;text-align:left;display:flex;flex-direction:column;gap:8px}
+.world.land{background:linear-gradient(135deg,#e8f6dd,#f6fbf1)}
+.world.sea{background:linear-gradient(135deg,#d7f0fb,#eef9fd)}
+.world.sky{background:linear-gradient(135deg,#e7f1ff,#fbfdff)}
+.world.locked{background:#efeef2;color:var(--muted)}
+.whead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.whead b{font-family:var(--display);font-size:26px;line-height:1}
+.whead span{font-size:13px;font-weight:800}
+.lvls{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.lvls button{border:2.5px solid var(--ink);border-radius:12px;background:var(--paper);padding:8px 6px;font-weight:800;font-size:14px;line-height:1.2;box-shadow:2px 3px 0 var(--ink)}
+.lvls button:disabled{box-shadow:none;background:#e4e2e9;color:#8c879a;cursor:not-allowed}
+.lvls button small{display:block;font-weight:600;font-size:12px;color:var(--muted)}
+
+/* Rescue */
+.scene{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;min-height:150px;
+  border:2.5px solid var(--ink);border-radius:18px;padding:12px 10px 8px;overflow:hidden;
+  background:linear-gradient(#9fd6f5 0%,#d9f0fb 55%,#7dbb5e 56%,#5f9a43 100%)}
+.scene.sea{background:linear-gradient(#5cc3e3 0%,#1f86b8 70%,#e2cc98 71%,#cdb27c 100%)}
+.scene.sky{background:linear-gradient(#7cc2f0 0%,#e3f3fd 60%,#a49a8e 61%,#7b736a 100%)}
+.ani{position:relative;font-size:88px;line-height:1;filter:drop-shadow(0 6px 4px rgba(0,0,0,.25))}
+.ani.happy{animation:hop .5s ease 3}
+.band{position:absolute;font-size:30px;right:-8px;bottom:6px;rotate:-20deg}
+@keyframes hop{50%{transform:translateY(-16px) rotate(-6deg)}}
+.bubble{position:relative;background:#fff;border:2.5px solid var(--ink);border-radius:18px;padding:8px 14px;max-width:280px;
+  font-family:var(--display);font-weight:700;font-size:22px;line-height:1.1;animation:pop .35s ease}
+.bubble::after{content:"";position:absolute;left:50%;bottom:-11px;width:16px;height:16px;background:#fff;border-right:2.5px solid var(--ink);
+  border-bottom:2.5px solid var(--ink);translate:-50% 0;rotate:45deg}
+@keyframes pop{from{transform:scale(.3);opacity:0}}
+.heart{position:absolute;bottom:20px;font-size:26px;animation:rise 1.6s ease-out forwards;pointer-events:none}
+@keyframes rise{to{transform:translateY(-130px) scale(1.3);opacity:0}}
+.bossStars{font-size:30px;letter-spacing:4px;color:var(--sun);-webkit-text-stroke:1.5px var(--ink)}
+.bossStars .off{color:#e2e0e7}
+.qbox{font-family:var(--display);font-weight:700;font-size:52px;line-height:1.05;padding:6px 0;letter-spacing:.04em}
+.qbox.text{font-family:var(--body);font-weight:800;font-size:20px;letter-spacing:0;line-height:1.3;text-wrap:balance}
+.qbox .pic{display:block;font-size:56px;letter-spacing:0;margin-bottom:4px}
+.choices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.choices button{border:3px solid var(--ink);border-radius:18px;background:var(--paper);font-family:var(--display);font-weight:700;
+  font-size:40px;padding:8px 0;box-shadow:3px 4px 0 var(--ink);font-variant-numeric:tabular-nums;min-width:0;overflow-wrap:anywhere}
+.choices.word button{font-size:26px;padding:12px 4px}
+.choices.text{grid-template-columns:1fr}
+.choices.text button{font-family:var(--body);font-weight:800;font-size:18px;padding:12px 14px}
+.choices button.wrong{background:#eee;color:#aaa;box-shadow:none;transform:translate(3px,4px);animation:shake .3s}
+.choices button.right{background:#7fd37a}
+@keyframes shake{25%{translate:-6px 0}75%{translate:6px 0}}
+.fact{background:#fff6d6;border:2.5px dashed var(--ink);border-radius:14px;padding:12px;text-align:left}
+.fact b{font-family:var(--display);font-size:24px;display:block}
+.voiceRow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.voiceRow select{flex:1 1 160px;min-width:0;border:2.5px solid var(--ink);border-radius:12px;padding:8px;font:inherit;font-weight:700;font-size:14px;background:var(--paper);color:var(--ink)}
+.qhead{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+.speak{border:2px solid var(--ink);border-radius:999px;background:#eef7fd;padding:4px 12px;font-weight:800;font-size:13px}
+.hint{min-height:22px;font-weight:800;color:var(--red)}
+.hint.good{color:var(--green)}
+
+/* Book */
+.book{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
+.bookHead{font-family:var(--display);font-weight:700;font-size:22px;text-align:left;margin-top:4px}
+.card{border:2.5px solid var(--ink);border-radius:14px;padding:8px 4px;background:#f1f8fd;display:flex;flex-direction:column;align-items:center;gap:2px}
+.card .e{font-size:40px;line-height:1.1}
+.card.locked{background:#ececf1}
+.card.locked .e{filter:brightness(0)!important;opacity:.25}
+.card small{font-weight:800;font-size:13px}
+.card button{border:0;background:none;padding:0}
+.stars{font-size:46px;letter-spacing:6px;color:var(--sun);-webkit-text-stroke:2px var(--ink)}
+.stars .off{color:#e2e0e7}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stats div{background:#f1f8fd;border-radius:12px;padding:8px}
+.stats b{display:block;font-family:var(--display);font-size:34px;line-height:1;font-variant-numeric:tabular-nums}
+.unlock{background:#fff6d6;border:2.5px solid var(--ink);border-radius:14px;padding:10px;font-weight:800}
+.record{display:inline-block;background:var(--red);color:#fff;border-radius:999px;padding:3px 12px;font-weight:800;font-size:14px}
+
+#toast{position:absolute;left:50%;top:84px;translate:-50% 0;max-width:min(92%,420px);background:var(--paper);border:2.5px solid var(--ink);
+  border-radius:14px;padding:8px 14px;font-weight:800;font-size:15px;text-align:center;box-shadow:2px 3px 0 var(--ink);pointer-events:none;
+  transition:opacity .25s;opacity:0}
+#toast.show{opacity:1}
+.poo{position:absolute;width:110px;height:90px;cursor:pointer}
+.poo i{position:absolute;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffffff,#e8e8de 60%,#c9c9bb);box-shadow:0 2px 3px rgba(0,0,0,.2)}
+.poo em{position:absolute;bottom:-20px;left:0;right:0;text-align:center;font-style:normal;font-weight:800;font-size:12px;color:var(--ink);
+  background:rgba(255,255,255,.9);border-radius:8px}
+@media (prefers-reduced-motion:reduce){.ani.happy,.choices button.wrong,.heart,.bubble{animation:none}}
+</style>
+
+<div id="app">
+  <canvas id="c" aria-label="Game world"></canvas>
+
+  <div class="hud" id="hud" hidden>
+    <button class="chip icon" id="pauseBtn" aria-label="Pause">II</button>
+    <div class="chip" id="powChip" title="Power"><span id="powIco" aria-hidden="true">⚡</span><span class="bat" id="bat"></span></div>
+    <div class="chip" title="Medicine kits"><span class="kit" aria-hidden="true"></span><b id="medN">0</b></div>
+    <div class="chip" title="Litter picked up"><span aria-hidden="true">♻️</span><b id="litN">0</b></div>
+    <div class="chip" title="Animals helped"><span aria-hidden="true">🐾</span><b id="aniN">0/3</b></div>
+    <div class="chip" id="distChip" title="Flight distance" hidden><b id="distN">0 m</b><span class="muted" id="bestN"></span></div>
+  </div>
+  <div class="prog" id="prog" hidden><div id="progFill"></div><span id="progLbl">⛰</span></div>
+  <div class="ctrl" id="ctrl" hidden>
+    <button id="upBtn" aria-label="Move up">▲</button>
+    <button id="downBtn" aria-label="Move down">▼</button>
+  </div>
+  <div id="toast" role="status"></div>
+  <div id="pooLayer"></div>
+
+  <!-- Title -->
+  <div class="overlay clear" id="titleScr">
+    <div class="panel">
+      <h1 id="logo">Vet Rescue Trail<small>On land, under the sea and up in the sky</small></h1>
+      <p>Help hurt animals, tidy up litter and keep our planet healthy. Finish each world to unlock the next one.</p>
+      <div class="label">Question level</div>
+      <div class="seg" id="modeSeg">
+        <button data-mode="easy" aria-pressed="true">Ages 6–7</button>
+        <button data-mode="hard" aria-pressed="false">Ages 8–10</button>
+      </div>
+      <div class="worlds" id="worlds"></div>
+      <div class="row">
+        <button class="btn alt" id="bookBtn">Rescue Book</button>
+        <button class="btn alt" id="muteBtn">Sound: on</button>
+      </div>
+      <div class="voiceRow">
+        <label class="label" for="voiceSel">Voice</label>
+        <select id="voiceSel"></select>
+        <button class="speak" id="voiceTest">🔊 Test</button>
+      </div>
+      <p class="muted">Game idea and drawings by our chief game designer, age 7.</p>
+    </div>
+  </div>
+
+  <!-- Rescue -->
+  <div class="overlay" id="rescueScr" hidden>
+    <div class="panel" role="dialog" aria-labelledby="rTitle">
+      <div class="scene" id="rScene">
+        <div class="bubble" id="rBubble" hidden></div>
+        <div class="ani" id="rAniWrap"><span id="rAni"></span><span class="band" id="rBand" hidden>🩹</span></div>
+      </div>
+      <h2 id="rTitle"></h2>
+      <div class="bossStars" id="rStars" hidden></div>
+      <p id="rText"></p>
+      <div id="rAsk" hidden>
+        <div class="qhead"><span class="label" id="rLabel"></span><button class="speak" id="rSpeak" aria-label="Read the question aloud">🔊 Read it to me</button></div>
+        <div class="qbox" id="rQ"></div>
+        <div class="choices" id="rChoices"></div>
+        <div class="hint" id="rHint"></div>
+      </div>
+      <div class="fact" id="rFact" hidden><b>Did you know?</b><p id="rFactTxt"></p></div>
+      <button class="btn go" id="rBtn" hidden></button>
+    </div>
+  </div>
+
+  <!-- Level done -->
+  <div class="overlay" id="doneScr" hidden>
+    <div class="panel">
+      <h2 id="dTitle"></h2>
+      <div class="stars" id="dStars"></div>
+      <div class="stats">
+        <div><b id="dAni">0</b>animals helped</div>
+        <div><b id="dLit">0</b>litter picked up</div>
+        <div><b id="dHeli">0</b>times help came</div>
+      </div>
+      <p id="dMsg"></p>
+      <div class="unlock" id="dUnlock" hidden></div>
+      <div class="row">
+        <button class="btn alt" id="dMenu">Menu</button>
+        <button class="btn go" id="dNext">Next level</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flight over (sky endless mode) -->
+  <div class="overlay" id="flightScr" hidden>
+    <div class="panel">
+      <h2>Flight over!</h2>
+      <p id="fMsg">The medical rocket guided your helicopter safely home.</p>
+      <div><span class="record" id="fRecord" hidden>New longest flight!</span></div>
+      <div class="stats">
+        <div><b id="fDist">0</b>metres flown</div>
+        <div><b id="fBest">0</b>longest flight</div>
+        <div><b id="fAni">0</b>birds helped</div>
+      </div>
+      <div class="row">
+        <button class="btn alt" id="fMenu">Menu</button>
+        <button class="btn go" id="fAgain">Fly again</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Book -->
+  <div class="overlay" id="bookScr" hidden>
+    <div class="panel">
+      <h2>Rescue Book</h2>
+      <p class="muted" id="bookCount"></p>
+      <div id="bookGrid"></div>
+      <div class="fact" id="bookFact" hidden><b id="bookFactName"></b><p id="bookFactTxt"></p></div>
+      <button class="btn" id="bookClose">Close</button>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div class="overlay" id="pauseScr" hidden>
+    <div class="panel">
+      <h2>Paused</h2>
+      <div class="row">
+        <button class="btn alt" id="pQuit">Menu</button>
+        <button class="btn go" id="pResume">Keep going</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const cv = $('#c'), ctx = cv.getContext('2d');
+const INK = '#2b2833', RED = '#e8453c';
+const BROWN_BIRD = 'sepia(1) saturate(1.7) hue-rotate(-12deg) brightness(.85)';
+
+// ---------------- content ----------------
+const WORLDS = {
+  land: {title:'Land', subject:'Maths', icon:'🌲', powIco:'⚡', pow:'power',
+    friend:'Ranger Sam drove over with a medicine kit. Teamwork!', call:'Call Ranger Sam for help',
+    helpCall:'Out of power! Calling the rescue helicopter...', helpDone:'The rescue helicopter dropped a new solar battery!'},
+  sea:  {title:'Under the Sea', subject:'Spelling', icon:'🌊', powIco:'🫧', pow:'air',
+    friend:'Diver Kai swam over with a medicine kit. Teamwork!', call:'Call Diver Kai for help',
+    helpCall:'Out of air! Calling the rescue boat...', helpDone:'The rescue boat dropped a fresh air tank!'},
+  sky:  {title:'Sky Rescue', subject:'Science', icon:'☁️', powIco:'⚡', pow:'power',
+    friend:'The medical blimp floated over with a medicine kit. Teamwork!', call:'Call the medical blimp'},
+};
+
+const ANIMALS = {
+  // land
+  deer:    {w:'land', e:'🦌', n:'Deer', hurt:'has a thorn stuck in its hoof.', thanks:'Thank you, Doctor! My hoof doesn\'t hurt any more!', fact:'Baby deer are called fawns. Their spotty coats help them hide in the sunny forest.'},
+  pig:     {w:'land', e:'🐷', n:'Pig', hurt:'has a sunburnt nose.', thanks:'Oink oink! Thank you! My nose feels so much better!', fact:'Pigs roll in mud to keep cool and protect their skin from the sun. They are very clever too!'},
+  hedgehog:{w:'land', e:'🦔', n:'Hedgehog', hurt:'got its foot stuck in a can.', thanks:'Thank you for getting that can off my foot!', fact:'A hedgehog has about 5,000 to 7,000 spines. It rolls into a prickly ball when it is scared.'},
+  boar:    {w:'land', e:'🐗', n:'Wild boar', hurt:'has a scratched snout.', thanks:'Snort! Thank you, kind vet! My snout is all better!', fact:'Wild boars have an amazing sense of smell. They can sniff out food hidden under the ground.'},
+  fox:     {w:'land', e:'🦊', n:'Fox', hurt:'is tangled in an old plastic bag.', thanks:'Thank you for untangling me! Please keep picking up litter!', fact:'Foxes wrap their big bushy tail around themselves like a blanket to keep warm.'},
+  badger:  {w:'land', e:'🦡', n:'Badger', hurt:'is stuck in a muddy ditch.', thanks:'Thank you for pulling me out! Time to go home and get clean.', fact:'Badgers live in underground homes called setts, and they keep them very tidy.'},
+  goat:    {w:'land', e:'🐐', n:'Mountain goat', hurt:'slipped on the rocks.', thanks:'Thank you! I\'ll be extra careful on the rocks now.', fact:'Mountain goats have soft, grippy pads on their hooves, like built-in climbing shoes.'},
+  hare:    {w:'land', e:'🐇', n:'Mountain hare', hurt:'has a sore ear from the cold wind.', thanks:'Thank you! My ears are nice and warm now!', fact:'Mountain hares grow white fur in winter so they can hide in the snow.'},
+  bear:    {w:'land', e:'🐻', n:'Bear', hurt:'has a bee sting on its paw.', thanks:'Thank you! That sting was so itchy. You\'re the best!', fact:'Bears sleep through most of the winter. This long sleep is called hibernation.'},
+  // sea
+  crab:    {w:'sea', e:'🦀', n:'Crab', hurt:'has a plastic ring stuck on its claw.', thanks:'Snap snap! Thank you! I can pinch again!', fact:'Crabs walk sideways. Some crabs can even grow a new claw if they lose one.'},
+  reeffish:{w:'sea', e:'🐠', n:'Reef fish', hurt:'swallowed a tiny piece of plastic.', thanks:'Blub blub! Thank you! My tummy feels better!', fact:'Coral reefs cover a tiny part of the ocean but are home to about a quarter of all sea creatures.'},
+  octopus: {w:'sea', e:'🐙', n:'Octopus', hurt:'has a sore arm from an old fishing hook.', thanks:'Thank you! All eight of my arms say thank you!', fact:'An octopus has three hearts and blue blood!'},
+  seal:    {w:'sea', e:'🦭', n:'Seal', hurt:'is caught in a fishing line.', thanks:'Arf arf! Thank you! I can swim free again!', fact:'Some seals can hold their breath underwater for more than an hour.'},
+  dolphin: {w:'sea', e:'🐬', n:'Dolphin', hurt:'bumped into an old barrel.', thanks:'Click click! Thank you, crew! You\'re amazing!', fact:'Dolphins sleep with half of their brain awake, so they remember to breathe.'},
+  turtle:  {w:'sea', e:'🐢', n:'Sea turtle', boss:true, hurt:'is tangled in a giant ghost net. This turtle is hurt the most!', thanks:'Thank you, crew! You saved me! Now I can swim home to Hawaii!', fact:'In Hawaii, the green sea turtle is called honu. Sea turtles can live for more than 50 years.'},
+  // sky
+  bluetit: {w:'sky', e:'🐦', n:'Blue tit', hurt:'flew into a window and feels dizzy.', thanks:'Tweet tweet! Thank you! I feel much better!', fact:'Long ago, blue tits learned to peck open the foil tops on milk bottles to drink the cream!'},
+  sparrow: {w:'sky', e:'🐦', f:BROWN_BIRD, n:'Sparrow', hurt:'has a balloon string tangled round its foot.', thanks:'Cheep cheep! Thank you for untangling me!', fact:'Sparrows love taking dust baths to keep their feathers clean.'},
+  magpie:  {w:'sky', e:'🐦‍⬛', n:'Magpie', hurt:'has a bent tail feather.', thanks:'Chak chak! Thank you so much!', fact:'Magpies are super clever. They can recognise themselves in a mirror!'},
+  eagle:   {w:'sky', e:'🦅', n:'Eagle', hurt:'has a sore talon.', thanks:'Thank you, Doctor! I can hold my branch again!', fact:'Eagles have super eyesight. They can spot a rabbit from very, very far away.'},
+  owl:     {w:'sky', e:'🦉', n:'Owl', boss:true, hurt:'is really poorly on the mountain top. This owl is hurt the most!', thanks:'Hoo hoo! Thank you! You flew all the way up here to save me!', fact:'Owls cannot move their eyes, so they turn their heads instead, almost all the way round!'},
+};
+
+const LEVELS = [
+  {world:'land', name:'Forest Trail', len:6500, speed:1.0, mix:{rock:3,mud:2,litter:5,med:2,sun:1}, rain:false, trees:'mixed',
+   sky:['#5aa7de','#cfe8f7'], far:'#8fb0c9', hill:['#6f9f58','#4f8040'], grass:'#5c9442', trail:'#a97d52',
+   pine:['#2f5e34','#5b8f4c'], leaf:['#3d6e2d','#86b45a'], animals:['deer','pig','hedgehog'], end:'⛺'},
+  {world:'land', name:'Muddy Hills', len:7500, speed:1.08, mix:{rock:3,mud:5,litter:4,med:2,sun:1}, rain:true, trees:'leaf',
+   sky:['#7d8fa3','#cbd5de'], far:'#93a2b0', hill:['#62875a','#456b40'], grass:'#4f843c', trail:'#7f5b3b',
+   pine:['#2a5131','#4c7a45'], leaf:['#34602c','#6f9a4f'], animals:['boar','fox','badger'], end:'⛺'},
+  {world:'land', name:'Mount Evans', len:8500, speed:1.15, mix:{rock:5,mud:2,litter:4,med:2,sun:2}, rain:false, trees:'pine', mountain:true,
+   sky:['#4a9ddb','#dcefff'], far:'#9db7d1', hill:['#7c9c6a','#5a7b4b'], grass:'#6a9450', trail:'#9c8670',
+   pine:['#24502f','#4f8650'], leaf:['#3d6e2d','#86b45a'], animals:['goat','hare','bear'], end:'Mount Evans'},
+  {world:'sea', name:'Coral Reef', len:7000, speed:1.0, mix:{barrel:2,jelly:3,net:2,litter:6,med:2,air:2},
+   water:['#43bad9','#0c5c84'], sand:'#e2cc98', animals:['crab','reeffish','octopus'], end:'🐚'},
+  {world:'sea', name:'Voyage to Hawaii', len:8500, speed:1.1, mix:{barrel:3,jelly:4,net:3,litter:5,med:2,air:2},
+   water:['#2a93c4','#06304f'], sand:'#cdb27c', animals:['seal','dolphin','turtle'], end:'Hawaii'},
+  {world:'sky', name:'Sky Rescue', endless:true, speed:.95, mix:{litter:5,med:2,sun:2,blimp:1},
+   sky:['#4fa3e0','#dceffc'], far:'#9fb9d3', animals:['bluetit','sparrow','magpie','eagle']},
+];
+const AT = [0.28, 0.58, 0.86];
+
+// Spelling (sea) — ages 6–7: picture + missing letter
+const SPELL_EASY = [['fish','🐟'],['crab','🦀'],['shell','🐚'],['boat','⛵'],['wave','🌊'],['seal','🦭'],['star','⭐'],['sand','🏖️'],
+  ['whale','🐋'],['ship','🚢'],['swim','🏊'],['sun','☀️'],['rock','🪨'],['duck','🦆'],['frog','🐸'],['dog','🐶'],['cat','🐱'],
+  ['hat','🎩'],['bed','🛏️'],['pig','🐷'],['egg','🥚'],['bus','🚌'],['sock','🧦'],['bell','🔔'],['tree','🌳'],['moon','🌙'],
+  ['cake','🎂'],['kite','🪁'],['rain','🌧️'],['snow','❄️'],['map','🗺️'],['van','🚐'],['pen','🖊️'],['fox','🦊'],['hen','🐔'],
+  ['bug','🐛'],['ant','🐜'],['bee','🐝'],['owl','🦉'],['cow','🐮'],['goat','🐐'],['lamb','🐑'],['milk','🥛'],['boot','👢'],
+  ['drum','🥁'],['hand','✋'],['king','🤴'],['ring','💍'],['nest','🪺'],['leaf','🍃'],['seed','🌱'],['tent','⛺'],['web','🕸️'],
+  ['log','🪵'],['jet','✈️'],['lion','🦁'],['bear','🐻'],['nut','🥜'],['box','📦'],['cup','🥤'],['bat','🦇']];
+
+// Spelling (sea) — ages 8–10: pick the right spelling
+const SPELL_HARD = [['ocean','🌊',['oshun','ocian']],['turtle','🐢',['turtel','tertle']],['dolphin','🐬',['dolfin','dolphen']],
+  ['island','🏝️',['iland','ilend']],['octopus','🐙',['octapus','octopuss']],['coral','🪸',['coril','corall']],['whale','🐋',['wale','whail']],
+  ['plastic','🧴',['plastik','plasstic']],['bubble','🫧',['bubbel','buble']],['jellyfish','🪼',['jelyfish','jellyfsh']],
+  ['diver','🤿',['dyver','divor']],['shark','🦈',['sharc','sharck']],['beach','🏖️',['beatch','beache']],['seaweed','🌿',['seeweed','seawead']],
+  ['submarine','⚓',['submareen','submerine']],['penguin','🐧',['pengwin','penguine']],['lobster','🦞',['lobstar','lobbster']],
+  ['squid','🦑',['squidd','skwid']],['oyster','🦪',['oister','oystir']],['anchor','⚓',['ankor','anchore']],['pirate','🏴‍☠️',['pirat','piret']],
+  ['treasure','💰',['treshure','treasur']],['mermaid','🧜',['mermade','mermayd']],['starfish','⭐',['starfsh','starrfish']],
+  ['parrot','🦜',['parot','parrut']],['rainbow','🌈',['rainbo','ranebow']],['volcano','🌋',['volkano','vulcano']],
+  ['surfboard','🏄',['surfbord','serfboard']],['sunshine','☀️',['sunshyne','sonshine']],['umbrella','☂️',['umbrela','umberella']],
+  ['castle','🏰',['castel','casle']],['river','🏞️',['rivver','rivur']],['planet','🪐',['planit','plannet']],['animal','🐾',['animle','aminal']],
+  ['elephant','🐘',['elefant','elephent']],['giraffe','🦒',['girafe','jiraffe']],['tortoise','🐢',['tortise','tortoyse']],
+  ['butterfly','🦋',['butterfli','buterfly']],['feather','🪶',['fether','feathur']],['rescue','🚑',['resque','rescew']],
+  ['doctor','🧑‍⚕️',['docter','doctur']],['medicine','💊',['medisine','medicin']],['helicopter','🚁',['helicoptor','hellicopter']],
+  ['friend','🤝',['freind','frend']],['water','💧',['warter','watter']],['clean','🧽',['cleen','klean']],['recycle','♻️',['resycle','recicle']],
+  ['family','👪',['famly','familee']],['school','🏫',['skool','shool']],['people','🧑‍🤝‍🧑',['peeple','pepole']],
+  ['beautiful','🌸',['beautifull','butiful']],['crocodile','🐊',['crocodyle','crockodile']],
+  ['kangaroo','🦘',['kangeroo','kangaru']],['monkey','🐒',['munkey','monky']],['rabbit','🐇',['rabit','rabbet']],
+  ['squirrel','🐿️',['squirel','skwirrel']],['spider','🕷️',['spyder','spidor']],['caterpillar','🐛',['catterpillar','caterpiller']],
+  ['journey','🧭',['jurney','journy']]];
+
+// Science (sky) — ages 6–7
+const SCI_EASY = [
+  ['What do plants need to grow?', 'Sunlight and water', ['Sweets and toys','Darkness and snow']],
+  ['What is a baby owl called?', 'An owlet', ['A puppy','A kitten']],
+  ['Where does rain come from?', 'Clouds', ['Trees','Rocks']],
+  ['What do birds lay?', 'Eggs', ['Seeds','Stones']],
+  ['Which of these has feathers?', 'A blue tit', ['A frog','A cat']],
+  ['What is the Sun?', 'A star', ['A planet','A cloud']],
+  ['Which part of you helps you hear?', 'Your ears', ['Your nose','Your elbows']],
+  ['Which planet do we live on?', 'Earth', ['Mars','Jupiter']],
+  ['What do bees make?', 'Honey', ['Milk','Bread']],
+  ['What makes a rainbow?', 'Sunlight shining through rain', ['Paint in the sky','Birds flying fast']],
+  ['What turns into a butterfly?', 'A caterpillar', ['A worm','A snail']],
+  ['What happens to ice when it gets warm?', 'It melts into water', ['It turns into wood','It gets colder']],
+  ['What is a baby frog called?', 'A tadpole', ['A cub','A chick']],
+  ['What is a baby sheep called?', 'A lamb', ['A foal','A calf']],
+  ['What is a baby cow called?', 'A calf', ['A kid','A joey']],
+  ['What is a baby dog called?', 'A puppy', ['A kitten','A duckling']],
+  ['Which animal has a trunk?', 'An elephant', ['A giraffe','A zebra']],
+  ['Which sense do you use with your nose?', 'Smell', ['Taste','Touch']],
+  ['Which sense do you use with your eyes?', 'Sight', ['Hearing','Smell']],
+  ['Where do fish live?', 'In water', ['In nests','In trees']],
+  ['What do caterpillars mostly eat?', 'Leaves', ['Rocks','Chocolate']],
+  ['Which season is usually the coldest?', 'Winter', ['Summer','Spring']],
+  ['In which season do leaves fall off many trees?', 'Autumn', ['Summer','Spring']],
+  ['What can we see in the sky on a clear night?', 'The Moon and stars', ['The Sun','A rainbow']],
+  ['What do we need to breathe?', 'Air', ['Sand','Juice']],
+  ['How many legs does a spider have?', '8', ['6','4']],
+  ['Which of these is a mammal?', 'A dog', ['A goldfish','A parrot']],
+  ['What do cows eat?', 'Grass', ['Fish','Pizza']],
+  ['Which of these will a magnet pick up?', 'A paperclip', ['A wooden spoon','A plastic cup']],
+  ['What does a seed grow into?', 'A plant', ['A rock','A bird']],
+  ['Which bird cannot fly?', 'A penguin', ['An eagle','A sparrow']],
+  ['What gives us light in the daytime?', 'The Sun', ['The Moon','Street lights']],
+  ['Which part of a plant is under the ground?', 'The roots', ['The petals','The flowers']],
+  ['What do we call frozen water?', 'Ice', ['Steam','Rain']],
+  ['Which of these floats on water?', 'A rubber duck', ['A stone','A coin']],
+  ['Which animal hops?', 'A kangaroo', ['A snail','A fish']],
+  ['Where do many birds lay their eggs?', 'In a nest', ['In a web','In a hive']],
+  ['Where do honey bees live?', 'In a hive', ['In a kennel','In a stable']],
+  ['Which of these is see-through?', 'Glass', ['Wood','Metal']],
+  ['Which of these is alive?', 'A tree', ['A rock','A spoon']],
+  ['How many seasons are there in a year?', '4', ['2','10']],
+  ['What colour are most leaves in summer?', 'Green', ['Blue','Purple']],
+  ['What do we use our teeth for?', 'Chewing food', ['Hearing','Smelling']],
+  ['What do hedgehogs do in winter?', 'Sleep for a long time', ['Fly somewhere warm','Build snowmen']],
+  ['Which animal has stripes?', 'A zebra', ['An elephant','A sheep']],
+  ['What helps ducks swim?', 'Webbed feet', ['Long ears','Sharp claws']],
+  ['What shape is the Earth?', 'Round like a ball', ['Flat like a pancake','Square like a box']],
+  ['Which animal is the tallest?', 'A giraffe', ['A mouse','A dog']],
+  ['What helps plants make their food?', 'Sunlight', ['Moonlight','Music']],
+  ['What do earthworms help to make?', 'Healthy soil', ['Honey','Milk']],
+  ['Which of these is a bird?', 'A magpie', ['A bat','A bee']],
+  ['What does a thermometer tell you?', 'How hot or cold it is', ['What time it is','How tall you are']],
+  ['What do you call a group of stars that makes a picture?', 'A constellation', ['A rainbow','A puddle']],
+  ['What keeps a polar bear warm?', 'Thick fur and fat', ['A woolly hat','Hot chocolate']],
+  ['Which of these melts in the sun?', 'An ice lolly', ['A stone','A spoon']],
+  ['What do tadpoles grow into?', 'Frogs', ['Fish','Ducks']],
+];
+
+// Science (sky) — ages 8–10
+const SCI_HARD = [
+  ['Which gas do we need to breathe in?', 'Oxygen', ['Carbon dioxide','Helium']],
+  ['Which gas do plants take in from the air?', 'Carbon dioxide', ['Oxygen','Helium']],
+  ['Why does a hot air balloon rise?', 'Hot air is lighter than cold air', ['Magnets pull it up','The basket is empty']],
+  ['Which force pulls things down to the ground?', 'Gravity', ['Magnetism','Friction']],
+  ['What do we call animals that are active at night?', 'Nocturnal', ['Hibernating','Migrating']],
+  ['Birds flying to warmer places for winter is called…', 'Migration', ['Hibernation','Evaporation']],
+  ['Water turning into water vapour is called…', 'Evaporation', ['Melting','Freezing']],
+  ['Which part of a plant makes food from sunlight?', 'The leaves', ['The roots','The seeds']],
+  ['What helps a helicopter lift into the air?', 'Its spinning rotor blades', ['Its wheels','Its lights']],
+  ['Which of these is renewable energy?', 'Solar power', ['Coal','Oil']],
+  ['How many legs does an insect have?', '6', ['8','4']],
+  ['What do owls, eagles and magpies all have?', 'Feathers and beaks', ['Fur and whiskers','Scales and fins']],
+  ['Which is the closest star to Earth?', 'The Sun', ['The Moon','Mars']],
+  ['What do we call an animal that eats only plants?', 'A herbivore', ['A carnivore','A predator']],
+  ['What do we call an animal that eats only meat?', 'A carnivore', ['A herbivore','A producer']],
+  ['At what temperature does water boil?', '100°C', ['50°C','0°C']],
+  ['At what temperature does water freeze?', '0°C', ['100°C','20°C']],
+  ['Which planet is called the Red Planet?', 'Mars', ['Venus','Neptune']],
+  ['What is the biggest planet in our solar system?', 'Jupiter', ['Earth','Mercury']],
+  ['How long does the Earth take to travel round the Sun?', 'About a year', ['One day','One week']],
+  ['What causes day and night?', 'The Earth spinning', ['The Sun switching off','Clouds covering the Sun']],
+  ['Which organ pumps blood around your body?', 'The heart', ['The lungs','The stomach']],
+  ['Which organs help you breathe?', 'The lungs', ['The kidneys','The heart']],
+  ['What are all the bones in your body called together?', 'The skeleton', ['The muscles','The skin']],
+  ['Which of these lets electricity flow through it?', 'Metal', ['Plastic','Wood']],
+  ['What does a thermometer measure?', 'Temperature', ['Weight','Length']],
+  ['What does a food chain show?', 'What eats what in nature', ['A necklace made of food','Where shops are']],
+  ['Which part of a plant takes in water from the soil?', 'The roots', ['The petals','The pollen']],
+  ['Which insect carries pollen from flower to flower?', 'A bee', ['A flea','A head louse']],
+  ['What is the Moon?', 'Earth\'s natural satellite', ['A star','A planet']],
+  ['What does a caterpillar make before it becomes a butterfly?', 'A chrysalis', ['A web','A shell']],
+  ['Which of these is a mammal that can fly?', 'A bat', ['An owl','A butterfly']],
+  ['Which of these is a mammal that lives in the sea?', 'A whale', ['A shark','A tuna']],
+  ['Which material is magnetic?', 'Iron', ['Aluminium','Copper']],
+  ['Water vapour turning back into liquid is called…', 'Condensation', ['Evaporation','Melting']],
+  ['Sea to cloud to rain and back again is called…', 'The water cycle', ['The food chain','The life cycle']],
+  ['A shadow forms when an object blocks…', 'Light', ['Sound','Air']],
+  ['Sound travels as…', 'Vibrations', ['Colours','Smells']],
+  ['Animals with a backbone are called…', 'Vertebrates', ['Invertebrates','Insects']],
+  ['Why is a spider not an insect?', 'It has 8 legs', ['It has wings','It has a backbone']],
+  ['What protects your brain?', 'Your skull', ['Your ribs','Your kneecaps']],
+  ['What is friction?', 'A force that slows things down', ['A type of rock','A kind of cloud']],
+  ['Which planet is closest to the Sun?', 'Mercury', ['Saturn','Earth']],
+  ['What is a scientist who studies animals called?', 'A zoologist', ['A geologist','An astronomer']],
+  ['What does a geologist study?', 'Rocks', ['Stars','Animals']],
+  ['Which of these can be recycled?', 'Glass bottles', ['Used tissues','Broken crayons']],
+  ['Why is litter bad for wildlife?', 'Animals can get trapped or eat it', ['It makes the grass grow','It keeps animals warm']],
+  ['What do roots do for a plant?', 'Hold it in the soil and take in water', ['Make the flowers smell','Catch insects']],
+  ['Which gas makes up most of the air?', 'Nitrogen', ['Oxygen','Carbon dioxide']],
+  ['Where does most of Earth\'s energy come from?', 'The Sun', ['The Moon','Volcanoes']],
+  ['How do fish breathe underwater?', 'Using gills', ['Using lungs','Through their tails']],
+  ['What is a habitat?', 'The natural home of a plant or animal', ['A type of food','A kind of weather']],
+  ['What do we call an animal that hunts other animals?', 'A predator', ['A prey','A producer']],
+  ['Which of these is a liquid at room temperature?', 'Water', ['Ice','Steam']],
+  ['What do solar panels turn sunlight into?', 'Electricity', ['Water','Wind']],
+  ['What does a wind turbine use to make electricity?', 'Moving air', ['Sunlight','Coal']],
+  ['How many planets are in our solar system?', '8', ['5','12']],
+  ['What protects Earth from the Sun\'s harmful rays?', 'The atmosphere', ['The Moon','The oceans']],
+  ['Why do owls hunt well in the dark?', 'Super hearing and big eyes', ['They glow in the dark','They use torches']],
+];
+
+// ---------------- storage (per-viewer convenience) ----------------
+let saved = new Set(), mode = 'easy', muted = false, unlocked = 0, best = 0;
+try {
+  saved = new Set(JSON.parse(localStorage.getItem('vrt-book') || '[]'));
+  mode = localStorage.getItem('vrt-mode') || 'easy';
+  unlocked = +(localStorage.getItem('vrt-unlocked') || 0);
+  best = +(localStorage.getItem('vrt-best') || 0);
+} catch (e) {}
+function persist(){ try {
+  localStorage.setItem('vrt-book', JSON.stringify([...saved])); localStorage.setItem('vrt-mode', mode);
+  localStorage.setItem('vrt-unlocked', unlocked); localStorage.setItem('vrt-best', best);
+} catch (e) {} }
+
+// ---------------- sound ----------------
+let AC = null;
+function sfx(type){
+  if (muted) return;
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    const seq = {ding:[[880,.07],[1320,.1]], bump:[[150,.16]], mud:[[200,.22]], yay:[[523,.1],[659,.1],[784,.1],[1047,.2]],
+      nope:[[320,.12],[260,.16]], tap:[[640,.05]], flap:[[420,.05]], heli:[[300,.08],[300,.08],[300,.08]]}[type];
+    let t = AC.currentTime;
+    for (const [f, d] of seq) {
+      const o = AC.createOscillator(), g = AC.createGain();
+      o.type = (type === 'bump' || type === 'mud') ? 'triangle' : 'sine';
+      o.frequency.value = f; g.gain.setValueAtTime(type === 'flap' ? .06 : .16, t); g.gain.exponentialRampToValueAtTime(.001, t + d);
+      o.connect(g).connect(AC.destination); o.start(t); o.stop(t + d); t += d * .9;
+    }
+  } catch (e) {}
+}
+// Pick the most natural English voice the device offers (Premium/Enhanced Mac voices win), skipping novelty voices.
+const NOVELTY = /Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Fred|Junior|Ralph|Kathy|Grandma|Grandpa|Eddy|Flo|Reed|Rocko|Sandy|Shelley|Deranged|Hysterical/i;
+let voices = [], voiceName = '';
+try { voiceName = localStorage.getItem('vrt-voice') || ''; } catch (e) {}
+function voiceScore(v){
+  let s = 0;
+  if (/Premium/i.test(v.name)) s += 60;
+  if (/Enhanced/i.test(v.name)) s += 45;
+  if (/Natural|Neural|Online|Google UK English|Google US English/i.test(v.name)) s += 35;
+  if (/Serena|Jamie|Daniel|Kate|Oliver|Martha|Arthur|Stephanie|Samantha|Ava|Zoe|Evan|Nathan|Allison|Susan|Tom|Karen|Moira|Tessa|Fiona|Lee|Catherine|Matilda|Libby|Sonia|Ryan/i.test(v.name)) s += 15;
+  if (/en-GB/i.test(v.lang)) s += 6;
+  if (v.localService) s += 2;
+  return s;
+}
+function loadVoices(){
+  try {
+    voices = speechSynthesis.getVoices().filter(v => /^en[-_]/i.test(v.lang) && !NOVELTY.test(v.name)).sort((a, b) => voiceScore(b) - voiceScore(a));
+  } catch (e) { voices = []; }
+  const sel = $('#voiceSel'); if (!sel) return;
+  sel.innerHTML = `<option value="">Best available${voices[0] ? ' (' + voices[0].name + ')' : ''}</option>` +
+    voices.map(v => `<option value="${v.name.replace(/"/g, '&quot;')}">${v.name} · ${v.lang}</option>`).join('');
+  sel.value = voices.some(v => v.name === voiceName) ? voiceName : '';
+}
+try { speechSynthesis.onvoiceschanged = loadVoices; } catch (e) {}
+function say(text){
+  if (muted) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = voices.find(x => x.name === voiceName) || voices[0];
+    if (v) { u.voice = v; u.lang = v.lang; }
+    u.pitch = 1.05; u.rate = .95;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+
+// ---------------- helpers ----------------
+const rand = (a, b) => a + Math.random() * (b - a);
+const ri = (a, b) => Math.floor(rand(a, b + 1));
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const shuffle = a => a.map(v => [Math.random(), v]).sort((x, y) => x[0] - y[0]).map(x => x[1]);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const hash = i => { const s = Math.sin(i * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+let seedN = 1; const srand = () => { seedN = (seedN * 16807) % 2147483647; return (seedN - 1) / 2147483646; };
+function shade(hex, a){
+  const n = parseInt(hex.slice(1), 16), c = [n >> 16, n >> 8 & 255, n & 255];
+  const f = v => Math.round(Math.max(0, Math.min(255, a < 0 ? v * (1 + a) : v + (255 - v) * a)));
+  return `rgb(${c.map(f).join(',')})`;
+}
+const DPR = () => Math.min(2, window.devicePixelRatio || 1);
+function mk(w, h, fn){ const c = document.createElement('canvas'), d = DPR(); c.width = Math.ceil(w * d); c.height = Math.ceil(h * d); const x = c.getContext('2d'); x.scale(d, d); fn(x, w, h); c.w = w; c.h = h; return c; }
+function rr(c, x, y, w, h, r){ c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+function emoji(e, x, y, size, filter){
+  ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (filter) ctx.filter = filter; ctx.fillText(e, x, y); if (filter) ctx.filter = 'none';
+}
+function softShadow(x, y, rx, ry, a = .3){
+  ctx.save(); ctx.translate(x, y); ctx.scale(1, ry / rx);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx); g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, rx, 0, 7); ctx.fill(); ctx.restore();
+}
+function ridge(x, a, b){ return Math.sin(x / a) * .55 + Math.sin(x / b + 1.7) * .3 + Math.sin(x / (b * .37) + .3) * .15; }
+
+// ---------------- sizing ----------------
+let W, H, laneH, laneY = [], trailTop, trailBot;
+let L = LEVELS[0], levelIdx = 0;
+let lane = 1, jy = 0;
+const isSky = () => L.world === 'sky';
+const skyS = () => clamp(H * .11, 40, 64);
+const GROUND = () => H - 22;
+const TOPY = () => 66;
+function resize(){
+  const dpr = DPR();
+  const r = cv.getBoundingClientRect(); W = r.width; H = r.height;
+  cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  trailBot = H * 0.95;
+  laneH = Math.min((trailBot - H * 0.48) / 3, W * 0.2, 130);
+  trailTop = trailBot - laneH * 3;
+  laneY = [0,1,2].map(i => trailTop + laneH * (i + .5));
+  jy = laneY[lane];
+  buildSprites();
+}
+const JX = () => isSky() ? Math.max(W * .28, 90) : Math.max(W * 0.3, 82 + laneH * .8);
+const BASE = () => Math.max(170, Math.min(290, W * 0.55)) * (mode === 'easy' ? 0.85 : 1);
+
+// ---------------- sprites ----------------
+let SP = {};
+function pineSprite(h, dark, light, haze){
+  const w = h * .56;
+  return mk(w, h, (x, w, h) => {
+    const tg = x.createLinearGradient(w/2 - h*.03, 0, w/2 + h*.03, 0); tg.addColorStop(0, '#7a5638'); tg.addColorStop(1, '#3e2a1d');
+    x.fillStyle = tg; x.fillRect(w/2 - h*.028, h*.74, h*.056, h*.26);
+    const tiers = 6;
+    for (let i = 0; i < tiers; i++) {
+      const t = i / (tiers - 1), by = h * (.84 - t * .64), tw = w * (.5 - t * .36), top = by - h * (.24 - t * .04);
+      const g = x.createLinearGradient(w/2 - tw, 0, w/2 + tw, 0);
+      g.addColorStop(0, light); g.addColorStop(.5, dark); g.addColorStop(1, shade(dark, -.35));
+      x.fillStyle = g; x.beginPath(); x.moveTo(w/2, top);
+      const n = 5;
+      for (let k = 1; k <= n; k++) { const yy = top + (by - top) * k / n, xx = w/2 + tw * k / n * (.85 + srand() * .3); x.lineTo(xx, yy); if (k < n) x.lineTo(xx - tw * .14, yy + (by - top) * .05); }
+      x.quadraticCurveTo(w/2, by + h * .035, w/2 - tw, by);
+      for (let k = n - 1; k >= 1; k--) { const yy = top + (by - top) * k / n, xx = w/2 - tw * k / n * (.85 + srand() * .3); x.lineTo(xx + tw * .14, yy + (by - top) * .05); x.lineTo(xx, yy); }
+      x.closePath(); x.fill();
+      x.fillStyle = 'rgba(0,0,0,.12)'; x.fillRect(w/2 - tw, by - h*.01, tw * 2, h * .01);
+    }
+    if (haze) { x.globalCompositeOperation = 'source-atop'; x.fillStyle = haze; x.fillRect(0, 0, w, h); }
+  });
+}
+function leafSprite(h, dark, light, haze){
+  const w = h * .82;
+  return mk(w, h, (x, w, h) => {
+    const tg = x.createLinearGradient(w/2 - h*.05, 0, w/2 + h*.05, 0); tg.addColorStop(0, '#7d5a3c'); tg.addColorStop(1, '#3b281b');
+    x.fillStyle = tg; x.beginPath(); x.moveTo(w/2 - h*.05, h); x.lineTo(w/2 - h*.025, h*.45); x.lineTo(w/2 + h*.025, h*.45); x.lineTo(w/2 + h*.055, h); x.fill();
+    x.strokeStyle = '#4a3322'; x.lineWidth = h * .02; x.lineCap = 'round';
+    x.beginPath(); x.moveTo(w/2, h*.6); x.lineTo(w/2 - w*.2, h*.42); x.moveTo(w/2, h*.55); x.lineTo(w/2 + w*.18, h*.38); x.stroke();
+    const blobs = [];
+    for (let i = 0; i < 14; i++) blobs.push({cx: w/2 + (srand() - .5) * w * .62, cy: h * (.18 + srand() * .34), r: w * (.14 + srand() * .1)});
+    blobs.sort((a, b) => b.cy - a.cy);
+    for (const b of blobs) {
+      const g = x.createRadialGradient(b.cx - b.r*.35, b.cy - b.r*.45, b.r*.1, b.cx, b.cy, b.r);
+      g.addColorStop(0, light); g.addColorStop(.6, dark); g.addColorStop(1, shade(dark, -.3));
+      x.fillStyle = g; x.beginPath(); x.arc(b.cx, b.cy, b.r, 0, 7); x.fill();
+    }
+    if (haze) { x.globalCompositeOperation = 'source-atop'; x.fillStyle = haze; x.fillRect(0, 0, w, h); }
+  });
+}
+function rockSprite(s, v){
+  const w = s * .9, h = s * .62;
+  return mk(w, h, (x, w, h) => {
+    seedN = 1000 + v * 77;
+    const n = 11, pts = [];
+    for (let i = 0; i < n; i++) {
+      const a = i / n * Math.PI * 2, r = .82 + srand() * .22;
+      pts.push([w/2 + Math.cos(a) * w * .46 * r, Math.min(h * .96, h * .58 + Math.sin(a) * h * .5 * r)]);
+    }
+    x.beginPath();
+    for (let i = 0; i <= n; i++) { const p = pts[i % n], q = pts[(i + 1) % n], mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2; i ? x.quadraticCurveTo(p[0], p[1], mx, my) : x.moveTo(mx, my); }
+    x.closePath();
+    const g = x.createRadialGradient(w*.36, h*.28, 2, w*.5, h*.6, w*.6);
+    g.addColorStop(0, '#d4d0c8'); g.addColorStop(.45, '#9a958c'); g.addColorStop(1, '#4a463f');
+    x.fillStyle = g; x.fill();
+    x.save(); x.clip();
+    for (let i = 0; i < 60; i++) { x.fillStyle = `rgba(${srand() < .5 ? '255,255,255' : '0,0,0'},${.06 + srand() * .1})`; x.beginPath(); x.arc(srand() * w, srand() * h, .6 + srand() * 1.6, 0, 7); x.fill(); }
+    if (v === 1) { const mg = x.createRadialGradient(w*.4, h*.2, 0, w*.4, h*.2, w*.3); mg.addColorStop(0, 'rgba(110,150,60,.7)'); mg.addColorStop(1, 'rgba(110,150,60,0)'); x.fillStyle = mg; x.fillRect(0, 0, w, h); }
+    x.strokeStyle = 'rgba(40,36,30,.5)'; x.lineWidth = 1.4;
+    x.beginPath(); x.moveTo(w*.45, h*.25); x.lineTo(w*.52, h*.5); x.lineTo(w*.48, h*.75); x.moveTo(w*.52, h*.5); x.lineTo(w*.66, h*.58); x.stroke();
+    x.restore();
+  });
+}
+function cloudSprite(w, dark){
+  const h = w * .45;
+  return mk(w, h, (x, w, h) => {
+    for (let i = 0; i < 9; i++) {
+      const cx = w * (.2 + srand() * .6), cy = h * (.45 + srand() * .25), r = h * (.25 + srand() * .2);
+      const g = x.createRadialGradient(cx, cy - r*.3, 0, cx, cy, r);
+      const c = dark ? '90,96,112' : '255,255,255';
+      g.addColorStop(0, `rgba(${c},.95)`); g.addColorStop(.7, `rgba(${c},.6)`); g.addColorStop(1, `rgba(${c},0)`);
+      x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill();
+    }
+  });
+}
+function tile(base, kind){
+  const S = 256;
+  const c = mk(S, S, (x, w, h) => {
+    seedN = kind === 'grass' ? 77 : 42;
+    x.fillStyle = base; x.fillRect(0, 0, w, h);
+    if (kind === 'dirt' || kind === 'sand') {
+      for (let i = 0; i < 1400; i++) {
+        x.fillStyle = `rgba(${srand() < .5 ? '255,236,210' : '50,32,16'},${(kind === 'sand' ? .03 : .05) + srand() * .12})`;
+        const r = .5 + srand() * 2.2; x.beginPath(); x.ellipse(srand() * w, srand() * h, r * 1.5, r, 0, 0, 7); x.fill();
+      }
+      for (let i = 0; i < (kind === 'sand' ? 10 : 26); i++) {
+        const px = srand() * w, py = srand() * h, r = 1.5 + srand() * 3.5;
+        x.fillStyle = 'rgba(0,0,0,.22)'; x.beginPath(); x.ellipse(px + 1, py + 1.5, r, r * .7, 0, 0, 7); x.fill();
+        const g = x.createRadialGradient(px - r*.3, py - r*.3, 0, px, py, r); g.addColorStop(0, kind === 'sand' ? '#fff8ec' : '#d9d2c6'); g.addColorStop(1, kind === 'sand' ? '#cbb790' : '#7c746a');
+        x.fillStyle = g; x.beginPath(); x.ellipse(px, py, r, r * .7, 0, 0, 7); x.fill();
+      }
+    } else {
+      for (let i = 0; i < 900; i++) {
+        const px = srand() * w, py = srand() * h, l = 3 + srand() * 7;
+        x.strokeStyle = srand() < .5 ? shade(base, .18 + srand() * .15) : shade(base, -.2 - srand() * .2);
+        x.lineWidth = .8 + srand(); x.beginPath(); x.moveTo(px, py); x.lineTo(px + (srand() - .5) * 3, py - l); x.stroke();
+      }
+    }
+  });
+  const p = ctx.createPattern(c, 'repeat');
+  try { p.setTransform(new DOMMatrix().scale(1 / DPR())); } catch (e) {}
+  return p;
+}
+function buildSprites(){
+  if (!W) return;
+  seedN = 11;
+  SP.clouds = [0, 1, 2].map(() => cloudSprite(160 + srand() * 120));
+  SP.storm = [0, 1].map(() => cloudSprite(200, true));
+  if (L.world === 'land') {
+    SP.backTrees = []; SP.frontTrees = [];
+    const haze = 'rgba(150,180,205,.38)';
+    for (let i = 0; i < 6; i++) {
+      const usePine = L.trees === 'pine' || (L.trees === 'mixed' && i % 2 === 0);
+      const h1 = laneH * (.75 + srand() * .45), h2 = laneH * (1.5 + srand() * .7);
+      SP.backTrees.push(usePine ? pineSprite(h1, L.pine[0], L.pine[1], haze) : leafSprite(h1, L.leaf[0], L.leaf[1], haze));
+      SP.frontTrees.push(usePine ? pineSprite(h2, L.pine[0], L.pine[1]) : leafSprite(h2, L.leaf[0], L.leaf[1]));
+    }
+    SP.rocks = [0, 1, 2].map(v => rockSprite(laneH, v));
+    SP.dirt = tile(L.trail, 'dirt');
+    SP.grass = tile(L.grass, 'grass');
+  } else if (L.world === 'sea') {
+    SP.sand = tile(L.sand, 'sand');
+  } else {
+    SP.grass = tile('#5f9448', 'grass');
+  }
+}
+
+// ---------------- state ----------------
+let phase = 'title';
+let dist = 0, objs = [], battery = 4, meds = 1, litter = 0, helped = 0, helpCalls = 0;
+let aIdx = 0, spawnT = 400, slow = 0, inv = 0, shake = 0, flagOut = false, helpT = 0, pooT = 8, tips = {};
+let fx = [], floats = [], rain = [];
+// sky
+let hy = 0, hvy = 0, started = false, colT = 0, prevGy = 0, nextAnimal = 0, skyCount = 0;
+resize(); addEventListener('resize', resize);
+
+function startLevel(i){
+  levelIdx = i; L = LEVELS[i]; buildSprites();
+  dist = 0; objs = []; lane = 1; jy = laneY[1]; battery = 4; meds = 1; litter = 0; helped = 0; helpCalls = 0;
+  aIdx = 0; spawnT = laneH * 4; slow = 0; inv = 0; shake = 0; flagOut = false; pooT = 6; fx = []; floats = [];
+  rain = (L.rain || L.world === 'sea') ? Array.from({length: L.world === 'sea' ? 40 : 90}, () => ({x: rand(0, W), y: rand(0, H), s: rand(.6, 1.2)})) : [];
+  const Wd = WORLDS[L.world];
+  $('#powIco').textContent = Wd.powIco; $('#powChip').title = Wd.pow;
+  $('#hud').classList.toggle('sea', L.world === 'sea');
+  showOnly(null); ['hud','ctrl'].forEach(id => $('#'+id).hidden = false);
+  $('#prog').hidden = !!L.endless; $('#distChip').hidden = !L.endless;
+  $('#progLbl').textContent = L.end || '';
+  $('#ctrl').classList.toggle('fly', isSky()); $('#downBtn').hidden = isSky();
+  $('#upBtn').textContent = isSky() ? 'Fly' : '▲';
+  if (isSky()) {
+    hy = H * .42; hvy = 0; started = false; colT = W * .5; prevGy = H * .45; nextAnimal = 1500; skyCount = 0; battery = 5; meds = 2;
+    $('#bestN').textContent = best ? ` · best ${best} m` : '';
+    toast('Tap to fly! Dodge the mountains and storm clouds.');
+  } else toast(`${L.name}: help ${L.animals.length} animals!`);
+  phase = 'run'; updateHud();
+  const hb = $('#hud').getBoundingClientRect().bottom - $('#app').getBoundingClientRect().top;
+  $('#prog').style.top = (hb + 22) + 'px'; $('#toast').style.top = (hb + (L.endless ? 12 : 44)) + 'px';
+}
+
+// ---------------- land & sea update ----------------
+function spawn(){
+  const mix = L.mix, total = Object.values(mix).reduce((a, b) => a + b, 0);
+  let r = Math.random() * total, t;
+  for (const k in mix) { r -= mix[k]; if (r <= 0) { t = k; break; } }
+  if (t === 'med' && meds >= 3) t = 'litter';
+  if ((t === 'sun' || t === 'air') && battery >= 5) t = 'litter';
+  const ln = ri(0, 2);
+  objs.push({t, lane: ln, x: W + 50, y: laneY[ln], v: ri(0, 3), ph: Math.random() * 6});
+  const hazards = L.world === 'sea' ? ['barrel', 'jelly', 'net'] : ['rock', 'mud'];
+  if (hazards.includes(t) && Math.random() < (mode === 'easy' ? .12 : .25)) {
+    const l2 = (ln + ri(1, 2)) % 3;
+    objs.push({t: pick(hazards), lane: l2, x: W + 50, y: laneY[l2], v: ri(0, 3), ph: Math.random() * 6});
+  }
+}
+
+function update(dt){
+  updFx(dt);
+  if (phase === 'title') { dist += 60 * dt; return; }
+  if (phase === 'help') {
+    helpT += dt;
+    if (helpT > 2.4) { battery = 3; phase = 'run'; inv = 1.5; updateHud(); toast(WORLDS[L.world].helpDone); }
+    return;
+  }
+  if (phase !== 'run') return;
+  if (isSky()) return updateSky(dt);
+  const spd = BASE() * L.speed * (slow > 0 ? .45 : 1);
+  slow -= dt; inv -= dt; shake = Math.max(0, shake - dt);
+  dist += spd * dt;
+  jy += (laneY[lane] - jy) * Math.min(1, dt * (L.world === 'sea' ? 9 : 14));
+  for (const o of objs) {
+    o.x -= spd * dt;
+    if (o.lane != null) o.y = laneY[o.lane];
+    if (o.t === 'thanks') { o.x += spd * .55 * dt; o.life -= dt; }
+  }
+  const jx = JX();
+  if (aIdx < L.animals.length && dist + (W - jx) >= L.len * AT[aIdx]) {
+    objs.push({t: 'animal', k: L.animals[aIdx], x: W + 60, y: trailTop - laneH * .3}); aIdx++;
+  }
+  if (!flagOut && dist + (W - jx) >= L.len) { objs.push({t: 'flag', x: W + 40}); flagOut = true; }
+  spawnT -= spd * dt;
+  if (spawnT <= 0 && dist < L.len - W) { spawn(); spawnT = laneH * rand(2.3, 3.8) * (mode === 'easy' ? 1.15 : 1); }
+
+  for (const o of objs) {
+    if (o.dead || o.t === 'thanks') continue;
+    if (o.t === 'animal') { if (o.x <= jx + laneH * .9) { o.dead = true; openRescue(o.k); return; } continue; }
+    if (o.t === 'flag') { if (o.x <= jx) { o.dead = true; levelDone(); return; } continue; }
+    if (Math.abs(o.y - jy) < laneH * .5 && Math.abs(o.x - jx) < laneH * .72) hit(o);
+  }
+  objs = objs.filter(o => !o.dead && o.x > -160 && !(o.t === 'thanks' && o.life <= 0));
+  if (L.rain) { pooT -= dt; if (pooT <= 0) { poo(); pooT = rand(7, 12); } }
+  $('#progFill').style.width = Math.min(100, dist / L.len * 100) + '%';
+}
+
+const BUMP_MSG = {rock:'Bump! -1 power', barrel:'Clunk! -1 air', jelly:'Jellyfish sting! -1 air', peak:'Bump! -1 power', storm:'Stormy cloud! -1 power'};
+function bump(type, dir){
+  if (inv > 0) return;
+  battery--; inv = 1.4; shake = .35; sfx('bump'); float(BUMP_MSG[type], RED);
+  if (isSky()) { hvy = dir * skyS() * 4.5; }
+  burst(JX() + 20, playerY(), type === 'jelly' ? '#e58ad8' : '#9a958c', 10);
+  if (type === 'jelly' && !tips.jelly) { tips.jelly = 1; toast('Jellyfish can sting. Steer round them!'); }
+  if (battery <= 0) {
+    if (isSky()) return flightOver();
+    phase = 'help'; helpT = 0; helpCalls++; sfx('heli'); toast(WORLDS[L.world].helpCall);
+  }
+}
+
+const LITTER_NAME = {land:['can','can','bottle','can'], sea:['tyre','bottle','plastic bag','can'], sky:['balloon','plastic bag','balloon','plastic bag']};
+function hit(o){
+  o.dead = true;
+  switch (o.t) {
+    case 'rock': case 'barrel': case 'jelly': bump(o.t); break;
+    case 'mud': case 'net':
+      slow = 1.6; sfx('mud');
+      if (o.t === 'mud') { float('Sticky mud!', '#6b4423'); burst(JX(), jy + laneH * .2, '#5a3b1f', 16); }
+      else { float('Tangled in a ghost net!', '#2d6a4f'); burst(JX(), jy, '#b8c99a', 10); }
+      if (o.t === 'mud' && !tips.mud) { tips.mud = 1; toast('Sticky mud slows you down. Change lanes to go round it!'); }
+      if (o.t === 'net' && !tips.net) { tips.net = 1; toast('Lost fishing nets are called ghost nets. They trap sea animals, so steer round them!'); }
+      break;
+    case 'litter': {
+      litter++; sfx('ding'); float('+1 ' + LITTER_NAME[L.world][o.v % 4], '#2b7a3d'); burst(o.x, o.y, '#5cc46a', 10);
+      if (!tips.litter) {
+        tips.litter = 1;
+        toast({land:'Litter can hurt animals. Every piece you pick up helps the planet!', sea:'Plastic in the sea can make animals poorly. Every piece you collect helps!',
+          sky:'Balloons and bags that blow away can tangle birds. Good catch!'}[L.world]);
+      }
+      break; }
+    case 'med': meds++; sfx('ding'); float('+1 medicine kit', '#c2332a'); burst(o.x, o.y, '#ffffff', 10); break;
+    case 'sun': case 'air':
+      battery = Math.min(5, battery + 1); sfx('ding');
+      float(o.t === 'air' ? '+1 air' : '+1 solar power', o.t === 'air' ? '#1a6fa0' : '#b8860b'); burst(o.x, o.y, o.t === 'air' ? '#d8f4ff' : '#ffc93c', 12);
+      if (o.t === 'sun' && !tips.sun) { tips.sun = 1; toast('Your engine runs on sunshine. Solar power is clean energy!'); }
+      if (o.t === 'air' && !tips.air) { tips.air = 1; toast('Bubbles fill up the submarine\'s air tanks.'); }
+      break;
+    case 'blimp': battery = Math.min(5, battery + 2); meds++; sfx('yay'); float('Medical blimp! +2 power', '#1a6fa0'); break;
+  }
+  updateHud();
+}
+
+// ---------------- sky update (endless flappy mode) ----------------
+function flap(){
+  if (phase !== 'run' || !isSky()) return;
+  if (!started) started = true;
+  hvy = -skyS() * 5.6; sfx('flap');
+}
+function spawnColumn(){
+  const s = skyS(), top = TOPY() + s * .6, bottom = GROUND() - 6;
+  const gapH = s * (mode === 'easy' ? 3.8 : 3.2) * (1 - Math.min(.18, dist / 60000));
+  const gy = clamp(prevGy + rand(-1, 1) * H * .22, top + gapH / 2, bottom - gapH / 2); prevGy = gy;
+  const w = s * rand(2.2, 3.2), x = W + w;
+  const r = Math.random();
+  if (r < .78 && bottom - (gy + gapH / 2) > s * .6) objs.push({t: 'peak', x, w, top: gy + gapH / 2, seed: Math.random() * 99});
+  if (r > .22 && (gy - gapH / 2) - TOPY() > s * .5) objs.push({t: 'storm', x, w: w * 1.1, b: gy - gapH / 2, seed: Math.random() * 99});
+  if (Math.random() < .75) {
+    const mix = L.mix, total = Object.values(mix).reduce((a, b) => a + b, 0);
+    let q = Math.random() * total, t;
+    for (const k in mix) { q -= mix[k]; if (q <= 0) { t = k; break; } }
+    if (t === 'sun' && battery >= 5) t = 'litter';
+    if (t === 'med' && meds >= 3) t = 'litter';
+    objs.push({t, x: x + w * .9, y: gy + rand(-.2, .2) * gapH, v: ri(0, 3), ph: Math.random() * 6});
+  }
+}
+function spawnAnimalColumn(){
+  const s = skyS(), boss = skyCount % 5 === 4;
+  const k = boss ? 'owl' : pick(L.animals);
+  const top = clamp(GROUND() - (boss ? H * .44 : rand(H * .18, H * .3)), TOPY() + s * 2.4, GROUND() - s);
+  const w = s * (boss ? 4.4 : 3), x = W + w;
+  objs.push({t: 'peak', x, w, top, seed: Math.random() * 99, snow: boss});
+  objs.push({t: 'animal', k, x, y: top - s * .45});
+  prevGy = top - s * 2;
+}
+function updateSky(dt){
+  const s = skyS();
+  inv -= dt; shake = Math.max(0, shake - dt);
+  if (!started) { hy += (H * .42 + Math.sin(performance.now() / 300) * 6 - hy) * Math.min(1, dt * 4); return; }
+  const spd = BASE() * L.speed * (1 + Math.min(.6, dist / 40000));
+  dist += spd * dt;
+  hvy = Math.min(hvy + s * (mode === 'easy' ? 11 : 13.5) * dt, s * 7);
+  hy += hvy * dt;
+  if (hy < TOPY() + s * .45) { hy = TOPY() + s * .45; hvy = Math.max(0, hvy); }
+  if (hy > GROUND() - s * .45) { hy = GROUND() - s * .45; hvy = 0; }
+  for (const o of objs) { o.x -= spd * dt; if (o.t === 'thanks') { o.x += spd * .4 * dt; o.life -= dt; } }
+
+  colT -= spd * dt;
+  if (colT <= 0) {
+    if (dist >= nextAnimal) { spawnAnimalColumn(); nextAnimal = dist + rand(2000, 2700); colT = Math.max(260, W * .5) * 1.4; }
+    else { spawnColumn(); colT = Math.max(230, W * .42) * (mode === 'easy' ? 1.15 : 1); }
+  }
+
+  const jx = JX(), r = s * .42;
+  for (const o of objs) {
+    if (o.dead || o.t === 'thanks') continue;
+    const dx = o.x - jx;
+    if (o.t === 'animal') { if (dx <= s * 1.4) { o.dead = true; hy = Math.min(hy, o.y - s * 1.1); hvy = 0; openRescue(o.k); return; } continue; }
+    if (o.t === 'peak') {
+      const base = GROUND() + 4, yy = hy + r * .7;
+      if (yy > o.top) { const half = (o.w / 2) * (yy - o.top) / (base - o.top); if (Math.abs(dx) < half + r * .3) bump('peak', -1); }
+      continue;
+    }
+    if (o.t === 'storm') { if (hy - r < o.b && Math.abs(dx) < o.w * .42) bump('storm', 1); continue; }
+    if (Math.hypot(dx, o.y - hy) < s * .75) hit(o);
+    if (phase !== 'run') return;
+  }
+  objs = objs.filter(o => !o.dead && o.x > -300 && !(o.t === 'thanks' && o.life <= 0));
+  $('#distN').textContent = Math.floor(dist / 10) + ' m';
+}
+
+// ---------------- fx ----------------
+const playerY = () => isSky() ? hy : jy;
+function burst(x, y, c, n){ for (let i = 0; i < n; i++) fx.push({x, y, vx: rand(-120, 120), vy: rand(-180, -40), life: rand(.4, .8), c, r: rand(2.5, 5), g: 400}); }
+function float(txt, c){ floats.push({x: JX(), y: playerY() - (isSky() ? skyS() : laneH * .9), txt, c, life: 1.1}); }
+function updFx(dt){
+  for (const p of fx) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += (p.g ?? 400) * dt; p.life -= dt; }
+  fx = fx.filter(p => p.life > 0);
+  for (const f of floats) { f.y -= 40 * dt; f.life -= dt; }
+  floats = floats.filter(f => f.life > 0);
+  if (L.world === 'sea') for (const d of rain) { d.y -= 60 * d.s * dt; d.x += Math.sin(d.y / 30) * .3; if (d.y < -10) { d.y = H + 10; d.x = rand(0, W); } }
+  else for (const d of rain) { d.y += 620 * d.s * dt; d.x -= 110 * dt; if (d.y > H) { d.y = -10; d.x = rand(0, W + 100); } }
+}
+
+// ======================= LAND SCENE =======================
+function drawLand(t){
+  const horizon = trailTop - laneH * .6;
+  const g = ctx.createLinearGradient(0, 0, 0, horizon);
+  g.addColorStop(0, L.sky[0]); g.addColorStop(1, L.sky[1]);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  if (!L.rain) sunGlow(W * .82, Math.max(110, H * .16));
+  drawClouds(t, 50);
+  const mBase = horizon - laneH * .5, off0 = dist * .04;
+  ctx.beginPath(); ctx.moveTo(0, mBase);
+  for (let x = 0; x <= W + 12; x += 12) ctx.lineTo(x, mBase - H * .1 - ridge(x + off0, 160, 90) * H * .06);
+  ctx.lineTo(W, mBase); ctx.closePath();
+  const mg = ctx.createLinearGradient(0, mBase - H * .18, 0, mBase); mg.addColorStop(0, shade(L.far, .1)); mg.addColorStop(1, shade(L.far, .35));
+  ctx.fillStyle = mg; ctx.fill();
+  if (L.mountain) drawMountEvans();
+  const off1 = dist * .12, hBase = horizon + 4;
+  ctx.beginPath(); ctx.moveTo(0, hBase);
+  for (let x = 0; x <= W + 12; x += 12) ctx.lineTo(x, hBase - laneH * .55 - ridge(x + off1, 130, 60) * laneH * .35);
+  ctx.lineTo(W, hBase); ctx.closePath();
+  const hg = ctx.createLinearGradient(0, hBase - laneH, 0, hBase); hg.addColorStop(0, L.hill[0]); hg.addColorStop(1, L.hill[1]);
+  ctx.fillStyle = hg; ctx.fill();
+  drawTreeRow(SP.backTrees, dist * .3, laneH * .42, hBase - laneH * .25, .2, 7);
+  ctx.save(); ctx.beginPath(); ctx.rect(0, horizon - laneH * .3, W, H); ctx.clip();
+  ctx.translate(-((dist * .8) % 256), 0); ctx.fillStyle = SP.grass; ctx.fillRect(0, horizon - laneH * .3, W + 256, H); ctx.restore();
+  const mfog = ctx.createLinearGradient(0, horizon - laneH * .3, 0, horizon + laneH * .2);
+  mfog.addColorStop(0, 'rgba(0,0,0,.18)'); mfog.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = mfog; ctx.fillRect(0, horizon - laneH * .3, W, laneH * .5);
+  drawTreeRow(SP.frontTrees, dist * .65, laneH * 1.05, trailTop - laneH * .06, .42, 23);
+  drawTrail();
+}
+function sunGlow(sx, sy){
+  const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, 140);
+  sg.addColorStop(0, 'rgba(255,250,220,1)'); sg.addColorStop(.12, 'rgba(255,240,180,.95)'); sg.addColorStop(.3, 'rgba(255,230,160,.35)'); sg.addColorStop(1, 'rgba(255,230,160,0)');
+  ctx.fillStyle = sg; ctx.fillRect(sx - 140, sy - 140, 280, 280);
+}
+function drawClouds(t, y0){
+  const cOff = dist * .04 + t * 6;
+  for (let i = 0; i < 5; i++) {
+    const c = SP.clouds[i % 3], span = W + c.w + 200;
+    const x = ((i * 310 - cOff) % span + span) % span - c.w;
+    ctx.globalAlpha = L.rain ? .95 : .85;
+    if (L.rain) ctx.filter = 'brightness(.82)';
+    ctx.drawImage(c, x, y0 + (i % 3) * 38, c.w, c.h);
+    ctx.filter = 'none';
+  }
+  ctx.globalAlpha = 1;
+}
+function drawTreeRow(set, off, sp, base, skip, salt){
+  const first = Math.floor(off / sp) - 2;
+  for (let i = first; i < first + W / sp + 5; i++) {
+    if (hash(i + salt) < skip) continue;
+    const s = set[Math.floor(hash(i * 3 + salt) * set.length)];
+    const x = i * sp - off + (hash(i + salt * 2) - .5) * sp * .6;
+    softShadow(x, base, s.w * .45, s.w * .1, .25);
+    ctx.drawImage(s, x - s.w / 2, base - s.h, s.w, s.h);
+  }
+}
+function drawMountEvans(){
+  const p = Math.min(1, dist / L.len), mx = W * 1.1 - p * W * .42, base = trailTop - laneH * .7, mh = Math.min(H * .42, base - 90);
+  const wid = mh * 1.15;
+  ctx.beginPath(); ctx.moveTo(mx - wid, base);
+  ctx.lineTo(mx - wid * .55, base - mh * .45); ctx.lineTo(mx - wid * .38, base - mh * .52); ctx.lineTo(mx - wid * .12, base - mh * .9);
+  ctx.lineTo(mx, base - mh); ctx.lineTo(mx + wid * .16, base - mh * .86); ctx.lineTo(mx + wid * .42, base - mh * .55); ctx.lineTo(mx + wid, base); ctx.closePath();
+  const g = ctx.createLinearGradient(mx - wid, 0, mx + wid, 0);
+  g.addColorStop(0, '#9aa3b5'); g.addColorStop(.48, '#7b8296'); g.addColorStop(.52, '#5b6175'); g.addColorStop(1, '#474c5d');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(mx - wid * .25, base - mh * .7);
+  ctx.lineTo(mx - wid * .12, base - mh * .9); ctx.lineTo(mx, base - mh); ctx.lineTo(mx + wid * .16, base - mh * .86); ctx.lineTo(mx + wid * .26, base - mh * .74);
+  ctx.lineTo(mx + wid * .14, base - mh * .7); ctx.lineTo(mx + wid * .05, base - mh * .78); ctx.lineTo(mx - wid * .06, base - mh * .66); ctx.lineTo(mx - wid * .15, base - mh * .74); ctx.closePath();
+  const sg = ctx.createLinearGradient(mx - wid * .25, 0, mx + wid * .26, 0); sg.addColorStop(0, '#ffffff'); sg.addColorStop(.5, '#f2f6fb'); sg.addColorStop(.52, '#cdd7e6'); sg.addColorStop(1, '#b6c2d4');
+  ctx.fillStyle = sg; ctx.fill();
+  const fog = ctx.createLinearGradient(0, base - mh * .35, 0, base); fog.addColorStop(0, 'rgba(220,235,250,0)'); fog.addColorStop(1, 'rgba(220,235,250,.6)');
+  ctx.fillStyle = fog; ctx.fillRect(mx - wid, base - mh * .35, wid * 2, mh * .35);
+  ctx.font = '700 24px Gaegu, cursive'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillText('Mount Evans', mx + 1, base - mh - 13);
+  ctx.fillStyle = '#fff'; ctx.fillText('Mount Evans', mx, base - mh - 14);
+}
+function trailPath(){
+  ctx.beginPath(); ctx.moveTo(0, trailTop + 2);
+  for (let x = 0; x <= W + 16; x += 16) ctx.lineTo(x, trailTop + Math.sin((x + dist) / 37) * 2.5 + Math.sin((x + dist) / 11) * 1.2);
+  for (let x = W + 16; x >= 0; x -= 16) ctx.lineTo(x, trailBot + Math.sin((x + dist) / 43) * 2.5 + Math.sin((x + dist) / 13) * 1.2);
+  ctx.closePath();
+}
+function drawTrail(){
+  ctx.save(); trailPath(); ctx.clip();
+  ctx.translate(-(dist % 256), 0); ctx.fillStyle = SP.dirt; ctx.fillRect(0, trailTop - 10, W + 256, trailBot - trailTop + 20);
+  ctx.restore();
+  ctx.save(); trailPath(); ctx.clip();
+  const sh = ctx.createLinearGradient(0, trailTop, 0, trailBot);
+  sh.addColorStop(0, 'rgba(0,0,0,.28)'); sh.addColorStop(.12, 'rgba(0,0,0,.05)'); sh.addColorStop(.5, 'rgba(255,240,220,.06)'); sh.addColorStop(.88, 'rgba(0,0,0,.05)'); sh.addColorStop(1, 'rgba(0,0,0,.3)');
+  ctx.fillStyle = sh; ctx.fillRect(0, trailTop - 10, W, trailBot - trailTop + 20);
+  for (let i = 0; i < 3; i++) {
+    const y = laneY[i] + laneH * .24, rg = ctx.createLinearGradient(0, y - laneH * .07, 0, y + laneH * .07);
+    rg.addColorStop(0, 'rgba(40,25,10,0)'); rg.addColorStop(.5, 'rgba(40,25,10,.16)'); rg.addColorStop(1, 'rgba(40,25,10,0)');
+    ctx.fillStyle = rg; ctx.fillRect(0, y - laneH * .07, W, laneH * .14);
+  }
+  ctx.restore();
+  ctx.lineCap = 'round';
+  for (const [edge, dir] of [[trailTop + 2, 1], [trailBot - 1, -1]]) {
+    for (let i = Math.floor(dist / 7); i < (dist + W) / 7 + 2; i++) {
+      const x = i * 7 - dist, h = 4 + hash(i * (dir + 3)) * 9;
+      ctx.strokeStyle = hash(i + dir * 5) < .5 ? shade(L.grass, -.2) : shade(L.grass, .15); ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(x, edge - dir * 3); ctx.lineTo(x + (hash(i) - .5) * 5, edge + dir * h * .55); ctx.stroke();
+    }
+  }
+}
+
+// ======================= SEA SCENE =======================
+function drawSea(t){
+  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, L.water[0]); g.addColorStop(1, L.water[1]);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // surface shimmer
+  ctx.fillStyle = 'rgba(255,255,255,.18)';
+  ctx.beginPath(); ctx.moveTo(0, 0);
+  for (let x = 0; x <= W + 10; x += 10) ctx.lineTo(x, 8 + Math.sin(x / 30 + t * 2) * 3 + Math.sin(x / 11 - t * 3));
+  ctx.lineTo(W, 0); ctx.fill();
+  // light rays
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 6; i++) {
+    const span = W + 300, x0 = ((i * span / 6 - dist * .06 + t * 10) % span + span) % span - 150;
+    const rg = ctx.createLinearGradient(0, 0, 0, H * .85); rg.addColorStop(0, 'rgba(255,255,255,.13)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + 50 + 20 * Math.sin(t + i), 0); ctx.lineTo(x0 + 170, H * .85); ctx.lineTo(x0 + 80, H * .85); ctx.fill();
+  }
+  ctx.restore();
+  // distant reef
+  const off = dist * .12;
+  ctx.beginPath(); ctx.moveTo(0, H);
+  for (let x = 0; x <= W + 12; x += 12) ctx.lineTo(x, trailBot - laneH * 1.7 - ridge(x + off, 120, 50) * laneH * .9);
+  ctx.lineTo(W, H); ctx.fillStyle = 'rgba(6,36,64,.28)'; ctx.fill();
+  // fish school
+  for (let i = 0; i < 16; i++) {
+    const span = W + 200, x = ((i * 53 + hash(i) * 400 - dist * .25 - t * 25) % span + span) % span - 100;
+    const y = 90 + hash(i + 4) * Math.max(40, trailTop - 140) + Math.sin(t * 2 + i) * 4;
+    ctx.fillStyle = 'rgba(8,40,70,.35)';
+    ctx.beginPath(); ctx.ellipse(x, y, 7, 3, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x + 6, y); ctx.lineTo(x + 11, y - 3); ctx.lineTo(x + 11, y + 3); ctx.fill();
+  }
+  // kelp
+  const ksp = 70, koff = dist * .45, kf = Math.floor(koff / ksp) - 1;
+  for (let i = kf; i < kf + W / ksp + 3; i++) {
+    if (hash(i + 31) < .45) continue;
+    const x = i * ksp - koff + hash(i) * 30, h = laneH * (2.2 + hash(i + 2) * 1.6), root = trailBot;
+    ctx.strokeStyle = hash(i + 5) < .5 ? 'rgba(46,125,79,.75)' : 'rgba(80,140,60,.7)'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x, root);
+    for (let k = 1; k <= 8; k++) { const yy = root - h * k / 8; ctx.lineTo(x + Math.sin(t * 1.5 + k * .7 + i) * k * 2.2, yy); }
+    ctx.stroke();
+    ctx.fillStyle = ctx.strokeStyle;
+    for (let k = 2; k <= 8; k += 2) { const yy = root - h * k / 8, xx = x + Math.sin(t * 1.5 + k * .7 + i) * k * 2.2; ctx.beginPath(); ctx.ellipse(xx + 7, yy, 9, 3.5, -.5, 0, 7); ctx.fill(); }
+  }
+  // seabed
+  const sandTop = trailBot - laneH * .08;
+  ctx.save(); ctx.beginPath(); ctx.moveTo(0, H);
+  for (let x = 0; x <= W + 12; x += 12) ctx.lineTo(x, sandTop + Math.sin((x + dist) / 60) * 4);
+  ctx.lineTo(W, H); ctx.closePath(); ctx.clip();
+  ctx.translate(-(dist % 256), 0); ctx.fillStyle = SP.sand; ctx.fillRect(0, sandTop - 10, W + 256, H); ctx.restore();
+  const sh = ctx.createLinearGradient(0, sandTop - 6, 0, H); sh.addColorStop(0, 'rgba(0,30,60,.0)'); sh.addColorStop(1, 'rgba(0,30,60,.35)');
+  ctx.fillStyle = sh; ctx.fillRect(0, sandTop - 6, W, H);
+  // coral garden on the seabed
+  const csp = 54, cf = Math.floor(dist / csp) - 1;
+  for (let i = cf; i < cf + W / csp + 3; i++) {
+    const x = i * csp - dist + hash(i + 9) * 20, y = sandTop + 6, k = hash(i + 17);
+    if (k < .3) drawBranchCoral(x, y, laneH * .35, hash(i) < .5 ? '#ff7a6b' : '#f2a0c8', i);
+    else if (k < .5) drawBrainCoral(x, y, laneH * .14);
+    else if (k < .62) { ctx.strokeStyle = 'rgba(70,150,80,.9)'; ctx.lineWidth = 2.5; for (let j = -2; j <= 2; j++) { ctx.beginPath(); ctx.moveTo(x + j * 3, y); ctx.quadraticCurveTo(x + j * 5 + Math.sin(t * 2 + j) * 4, y - laneH * .15, x + j * 4 + Math.sin(t * 2 + j) * 6, y - laneH * .3); ctx.stroke(); } }
+    else if (k < .67) emoji('⭐', x, y + 4, laneH * .14, 'hue-rotate(-30deg) saturate(1.5)');
+  }
+}
+function drawBranchCoral(x, y, h, c, seed){
+  ctx.strokeStyle = c; ctx.lineCap = 'round';
+  const br = (bx, by, len, ang, d) => {
+    if (d > 3) return;
+    const ex = bx + Math.cos(ang) * len, ey = by + Math.sin(ang) * len;
+    ctx.lineWidth = Math.max(1.5, 5 - d * 1.2); ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ex, ey); ctx.stroke();
+    br(ex, ey, len * .72, ang - .45 - hash(seed + d) * .2, d + 1); br(ex, ey, len * .7, ang + .4 + hash(seed - d) * .2, d + 1);
+  };
+  br(x, y, h * .45, -Math.PI / 2, 0);
+}
+function drawBrainCoral(x, y, r){
+  const g = ctx.createRadialGradient(x - r * .3, y - r * .5, 0, x, y - r * .2, r * 1.2);
+  g.addColorStop(0, '#f3d27a'); g.addColorStop(1, '#a8873c');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, r * 1.2, r, 0, Math.PI, 0); ctx.fill();
+  ctx.strokeStyle = 'rgba(110,80,30,.5)'; ctx.lineWidth = 1;
+  for (let k = 1; k < 4; k++) { ctx.beginPath(); ctx.ellipse(x, y, r * 1.2 * k / 4, r * k / 4, 0, Math.PI, 0); ctx.stroke(); }
+}
+
+// ======================= SKY SCENE =======================
+function drawSkyScene(t){
+  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, L.sky[0]); g.addColorStop(1, L.sky[1]);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  sunGlow(W * .85, Math.max(110, H * .2));
+  // distant mountains
+  const gr = GROUND(), off0 = dist * .03;
+  ctx.beginPath(); ctx.moveTo(0, gr);
+  for (let x = 0; x <= W + 12; x += 12) ctx.lineTo(x, gr - H * .22 - ridge(x + off0, 150, 70) * H * .1);
+  ctx.lineTo(W, gr); const mg = ctx.createLinearGradient(0, gr - H * .35, 0, gr); mg.addColorStop(0, shade(L.far, .05)); mg.addColorStop(1, shade(L.far, .45));
+  ctx.fillStyle = mg; ctx.fill();
+  drawClouds(t, 80);
+  // flocks of birds far away, like the drawing
+  for (let i = 0; i < 4; i++) {
+    const span = W + 300, fxp = ((i * 260 - dist * .15 - t * 15) % span + span) % span - 100, fy = 100 + hash(i + 3) * H * .35;
+    ctx.strokeStyle = 'rgba(40,50,70,.55)'; ctx.lineWidth = 1.6;
+    for (let k = 0; k < 7; k++) {
+      const bx = fxp + (k % 3) * 14 + Math.floor(k / 3) * 7, by = fy + Math.floor(k / 3) * 9, flapA = Math.sin(t * 8 + k) * 2;
+      ctx.beginPath(); ctx.moveTo(bx - 5, by - 2 - flapA); ctx.quadraticCurveTo(bx - 2, by, bx, by + 1); ctx.quadraticCurveTo(bx + 2, by, bx + 5, by - 2 - flapA); ctx.stroke();
+    }
+  }
+  // green hills and little houses
+  const off1 = dist * .5;
+  ctx.beginPath(); ctx.moveTo(0, H);
+  for (let x = 0; x <= W + 12; x += 12) ctx.lineTo(x, gr - 14 - ridge(x + off1, 90, 40) * 10);
+  ctx.lineTo(W, H); ctx.closePath();
+  ctx.save(); ctx.clip(); ctx.translate(-(off1 % 256), 0); ctx.fillStyle = SP.grass; ctx.fillRect(0, gr - 40, W + 256, H); ctx.restore();
+  const hsp = 52, hf = Math.floor(off1 / hsp) - 1;
+  for (let i = hf; i < hf + W / hsp + 3; i++) {
+    if (hash(i + 3) < .35) continue;
+    const x = i * hsp - off1, y = gr - 6 - ridge(x + off1, 90, 40) * 10, hh = 12 + hash(i) * 6, ww = 16 + hash(i + 1) * 6;
+    ctx.fillStyle = hash(i + 5) < .5 ? '#f3ead9' : '#e3e7ee'; ctx.fillRect(x - ww / 2, y - hh, ww, hh);
+    ctx.fillStyle = hash(i + 7) < .5 ? '#b5483a' : '#6e5a4a'; ctx.beginPath(); ctx.moveTo(x - ww / 2 - 3, y - hh); ctx.lineTo(x, y - hh - 9); ctx.lineTo(x + ww / 2 + 3, y - hh); ctx.fill();
+    ctx.fillStyle = '#ffe28a'; ctx.fillRect(x - 3, y - hh + 4, 5, 4);
+  }
+}
+function drawPeak(o){
+  const base = GROUND() + 4, hgt = base - o.top;
+  const path = () => {
+    ctx.beginPath(); ctx.moveTo(o.x - o.w / 2, base);
+    for (let k = 1; k < 6; k++) ctx.lineTo(o.x - o.w / 2 + (o.w / 2) * k / 6 + (hash(o.seed + k) - .5) * o.w * .06, base - hgt * k / 6 + (hash(o.seed + k * 3) - .5) * hgt * .06);
+    ctx.lineTo(o.x, o.top);
+    for (let k = 5; k >= 1; k--) ctx.lineTo(o.x + o.w / 2 - (o.w / 2) * k / 6 + (hash(o.seed - k) - .5) * o.w * .06, base - hgt * k / 6 + (hash(o.seed - k * 3) - .5) * hgt * .06);
+    ctx.lineTo(o.x + o.w / 2, base); ctx.closePath();
+  };
+  path();
+  const g = ctx.createLinearGradient(o.x - o.w / 2, 0, o.x + o.w / 2, 0);
+  g.addColorStop(0, '#b3aca1'); g.addColorStop(.48, '#8b847a'); g.addColorStop(.52, '#625c54'); g.addColorStop(1, '#45403a');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.save(); path(); ctx.clip();
+  const capY = o.top + Math.min(hgt * .3, o.w * .45);
+  if (o.snow || hgt > H * .3) {
+    ctx.beginPath(); ctx.moveTo(o.x - o.w, o.top - 10);
+    ctx.lineTo(o.x + o.w, o.top - 10); ctx.lineTo(o.x + o.w, capY);
+    for (let k = 6; k >= -6; k--) ctx.lineTo(o.x + o.w * k / 12, capY + (k % 2 ? -.12 : .1) * (capY - o.top));
+    ctx.closePath();
+    const sg = ctx.createLinearGradient(o.x - o.w / 4, 0, o.x + o.w / 4, 0); sg.addColorStop(0, '#ffffff'); sg.addColorStop(.5, '#eef3f9'); sg.addColorStop(.52, '#c7d2e2'); sg.addColorStop(1, '#aebad0');
+    ctx.fillStyle = sg; ctx.fill();
+  }
+  const fog = ctx.createLinearGradient(0, base - hgt * .3, 0, base); fog.addColorStop(0, 'rgba(255,255,255,0)'); fog.addColorStop(1, 'rgba(230,240,250,.35)');
+  ctx.fillStyle = fog; ctx.fillRect(o.x - o.w, base - hgt * .3, o.w * 2, hgt * .3);
+  ctx.restore();
+}
+function drawStorm(o, t){
+  const r = o.w * .26;
+  const g = ctx.createLinearGradient(0, 0, 0, o.b); g.addColorStop(0, '#3f4656'); g.addColorStop(1, '#6b7386');
+  ctx.fillStyle = g; ctx.fillRect(o.x - o.w / 2, 0, o.w, Math.max(0, o.b - r * .6));
+  for (let k = 0; k < 4; k++) {
+    const cx = o.x - o.w / 2 + r + k * (o.w - 2 * r) / 3, cy = o.b - r * .55 + Math.sin(k * 2 + o.seed) * r * .15;
+    const cg = ctx.createRadialGradient(cx - r * .3, cy - r * .3, 0, cx, cy, r);
+    cg.addColorStop(0, '#9aa2b4'); cg.addColorStop(1, '#5b6274');
+    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  }
+  if (Math.floor(t * 3 + o.seed) % 6 === 0) {
+    ctx.save(); ctx.strokeStyle = '#fff3a0'; ctx.lineWidth = 3; ctx.shadowColor = '#fff3a0'; ctx.shadowBlur = 12;
+    const lx = o.x + Math.sin(o.seed) * o.w * .2;
+    ctx.beginPath(); ctx.moveTo(lx, o.b); ctx.lineTo(lx - 8, o.b + 16); ctx.lineTo(lx + 3, o.b + 18); ctx.lineTo(lx - 6, o.b + 36); ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// ======================= OBJECTS =======================
+function drawObj(o, t){
+  const s = isSky() ? skyS() * 1.3 : laneH;
+  switch (o.t) {
+    case 'rock': {
+      const sp = SP.rocks[o.v % 3];
+      softShadow(o.x + s * .05, o.y + s * .22, s * .45, s * .1, .35);
+      ctx.drawImage(sp, o.x - sp.w / 2, o.y + s * .26 - sp.h, sp.w, sp.h);
+      break; }
+    case 'mud': {
+      ctx.save(); ctx.translate(o.x, o.y + s * .12); ctx.scale(1, .42);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s * .52);
+      g.addColorStop(0, '#2e1f10'); g.addColorStop(.55, '#4a3219'); g.addColorStop(.85, 'rgba(90,62,34,.85)'); g.addColorStop(1, 'rgba(90,62,34,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, s * .52, 0, 7); ctx.fill();
+      const hl = ctx.createRadialGradient(-s * .12, -s * .12, 0, -s * .12, -s * .12, s * .22);
+      hl.addColorStop(0, 'rgba(255,255,255,.28)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = hl; ctx.beginPath(); ctx.arc(-s * .12, -s * .12, s * .22, 0, 7); ctx.fill();
+      ctx.restore();
+      break; }
+    case 'barrel': {
+      const b = Math.sin(t * 1.5 + o.ph) * s * .03;
+      ctx.save(); ctx.translate(o.x, o.y + b); ctx.rotate(Math.sin(o.ph) * .25);
+      const g = ctx.createLinearGradient(-s * .2, 0, s * .2, 0);
+      g.addColorStop(0, '#5a2b14'); g.addColorStop(.35, '#c4642a'); g.addColorStop(.6, '#9c4a1f'); g.addColorStop(1, '#4a2210');
+      rr(ctx, -s * .2, -s * .27, s * .4, s * .54, s * .06); ctx.fillStyle = g; ctx.fill();
+      ctx.fillStyle = '#ffcc33'; ctx.fillRect(-s * .2, -s * .06, s * .4, s * .12);
+      ctx.fillStyle = '#2b2b2b'; for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.moveTo(-s * .2 + k * s * .1, s * .06); ctx.lineTo(-s * .15 + k * s * .1, -s * .06); ctx.lineTo(-s * .1 + k * s * .1, -s * .06); ctx.lineTo(-s * .15 + k * s * .1, s * .06); ctx.fill(); }
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-s * .2, -s * .2, s * .4, s * .02); ctx.fillRect(-s * .2, s * .18, s * .4, s * .02);
+      ctx.restore(); break; }
+    case 'jelly': {
+      const b = Math.sin(t * 2 + o.ph) * s * .12, pulse = 1 + Math.sin(t * 4 + o.ph) * .08;
+      ctx.save(); ctx.translate(o.x, o.y + b);
+      ctx.strokeStyle = 'rgba(240,170,230,.7)'; ctx.lineWidth = 2;
+      for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.moveTo(k * s * .06, 0); for (let j = 1; j <= 5; j++) ctx.lineTo(k * s * .06 + Math.sin(t * 3 + j + k) * 4, j * s * .07); ctx.stroke(); }
+      const g = ctx.createRadialGradient(-s * .05, -s * .12, 0, 0, -s * .02, s * .24 * pulse);
+      g.addColorStop(0, 'rgba(255,230,250,.95)'); g.addColorStop(.6, 'rgba(230,140,220,.7)'); g.addColorStop(1, 'rgba(180,90,200,.35)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, s * .22 * pulse, s * .18, 0, Math.PI, 0); ctx.quadraticCurveTo(0, s * .06, -s * .22 * pulse, 0); ctx.fill();
+      ctx.restore(); break; }
+    case 'net': {
+      ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(.12 + Math.sin(t + o.ph) * .05);
+      const n = s * .55;
+      ctx.strokeStyle = 'rgba(196,214,160,.85)'; ctx.lineWidth = 1.6;
+      for (let k = 0; k <= 6; k++) {
+        const p = -n / 2 + n * k / 6;
+        ctx.beginPath(); ctx.moveTo(p, -n / 2); ctx.quadraticCurveTo(p + Math.sin(t * 2 + k) * 3, 0, p, n / 2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-n / 2, p); ctx.quadraticCurveTo(0, p + Math.sin(t * 2 + k) * 3, n / 2, p); ctx.stroke();
+      }
+      for (const fxp of [-n / 2, 0, n / 2]) { ctx.fillStyle = '#ff8a3d'; ctx.beginPath(); ctx.arc(fxp, -n / 2 - 4, 5, 0, 7); ctx.fill(); }
+      ctx.restore(); break; }
+    case 'litter': drawLitter(o, s, t); break;
+    case 'med': {
+      if (isSky()) { drawMedBalloon(o, s, t); break; }
+      const b = Math.sin(t * 4 + o.ph) * s * .04;
+      if (L.world === 'land') softShadow(o.x, o.y + s * .2, s * .2, s * .05, .3);
+      const glow = ctx.createRadialGradient(o.x, o.y + b, 0, o.x, o.y + b, s * .42);
+      glow.addColorStop(0, 'rgba(255,255,255,.7)'); glow.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = glow; ctx.fillRect(o.x - s * .45, o.y + b - s * .45, s * .9, s * .9);
+      drawKit(o.x, o.y + b, s);
+      break; }
+    case 'sun': {
+      ctx.save(); ctx.translate(o.x, o.y);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s * .4);
+      g.addColorStop(0, 'rgba(255,255,230,1)'); g.addColorStop(.3, 'rgba(255,214,70,1)'); g.addColorStop(.5, 'rgba(255,190,40,.5)'); g.addColorStop(1, 'rgba(255,190,40,0)');
+      ctx.rotate(t);
+      ctx.fillStyle = 'rgba(255,200,60,.5)';
+      for (let i = 0; i < 8; i++) { ctx.rotate(Math.PI / 4); ctx.beginPath(); ctx.moveTo(s * .14, -s * .03); ctx.lineTo(s * .36, 0); ctx.lineTo(s * .14, s * .03); ctx.fill(); }
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, s * .4, 0, 7); ctx.fill();
+      ctx.restore(); break; }
+    case 'air': {
+      for (const [dx, dy, r] of [[0, 0, .14], [-.14, .1, .08], [.12, .12, .07], [.05, -.17, .06]]) {
+        const bx = o.x + dx * s, by = o.y + dy * s + Math.sin(t * 3 + o.ph + dx * 9) * 3, rr2 = r * s;
+        const g = ctx.createRadialGradient(bx - rr2 * .35, by - rr2 * .35, 0, bx, by, rr2);
+        g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(.5, 'rgba(200,240,255,.35)'); g.addColorStop(1, 'rgba(160,220,255,.6)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bx, by, rr2, 0, 7); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.stroke();
+      }
+      break; }
+    case 'blimp': drawBlimp(o.x, o.y + Math.sin(t * 2) * 4, s * 1.1); break;
+  }
+}
+function drawKit(x, y, s){
+  ctx.save(); ctx.translate(x, y);
+  ctx.strokeStyle = '#555'; ctx.lineWidth = s * .03; ctx.beginPath(); ctx.arc(0, -s * .13, s * .07, Math.PI, 0); ctx.stroke();
+  const g = ctx.createLinearGradient(0, -s * .13, 0, s * .15); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#d9dce2');
+  rr(ctx, -s * .17, -s * .13, s * .34, s * .26, s * .04); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = '#9aa0aa'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.fillStyle = RED; ctx.fillRect(-s * .025, -s * .09, s * .05, s * .18); ctx.fillRect(-s * .09, -s * .025, s * .18, s * .05);
+  ctx.restore();
+}
+function drawLitter(o, s, t){
+  const v = o.v % 4, world = L.world;
+  if (world === 'sky') {
+    ctx.save(); ctx.translate(o.x, o.y + Math.sin(t * 2 + o.ph) * 5);
+    if (v % 2 === 0) {
+      ctx.strokeStyle = 'rgba(60,60,60,.6)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(0, s * .2);
+      for (let k = 1; k < 6; k++) ctx.lineTo(Math.sin(t * 3 + k) * 4, s * .2 + k * s * .07); ctx.stroke();
+      const g = ctx.createRadialGradient(-s * .06, -s * .08, 0, 0, 0, s * .22);
+      g.addColorStop(0, '#ffb3b3'); g.addColorStop(.4, v ? '#3b6fd8' : '#e8453c'); g.addColorStop(1, v ? '#1d3f8f' : '#8e1a14');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, s * .17, s * .21, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = v ? '#1d3f8f' : '#8e1a14'; ctx.beginPath(); ctx.moveTo(-4, s * .2); ctx.lineTo(4, s * .2); ctx.lineTo(0, s * .17); ctx.fill();
+    } else drawBag(s);
+    ctx.restore(); return;
+  }
+  if (world === 'land') softShadow(o.x, o.y + s * .14, s * .2, s * .05, .35);
+  ctx.save(); ctx.translate(o.x, o.y + (world === 'sea' ? Math.sin(t * 1.5 + o.ph) * s * .04 : s * .04));
+  if (world === 'sea' && v === 0) {
+    const g = ctx.createRadialGradient(-s * .05, -s * .05, s * .05, 0, 0, s * .26);
+    g.addColorStop(0, '#5b5b62'); g.addColorStop(1, '#141417');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, s * .26, s * .2, .2, 0, 7); ctx.ellipse(0, 0, s * .12, s * .09, .2, 0, 7); ctx.fill('evenodd');
+    ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 2;
+    for (let k = 0; k < 12; k++) { const a = k / 12 * 7; ctx.beginPath(); ctx.moveTo(Math.cos(a) * s * .2, Math.sin(a) * s * .15); ctx.lineTo(Math.cos(a) * s * .25, Math.sin(a) * s * .19); ctx.stroke(); }
+  } else if (world === 'sea' && v === 2) {
+    drawBag(s);
+  } else if (v === 1 || (world === 'land' && v === 2)) {
+    ctx.rotate(1.35);
+    const g = ctx.createLinearGradient(-s * .08, 0, s * .08, 0);
+    g.addColorStop(0, 'rgba(150,205,230,.75)'); g.addColorStop(.35, 'rgba(235,250,255,.9)'); g.addColorStop(1, 'rgba(90,150,185,.75)');
+    rr(ctx, -s * .08, -s * .2, s * .16, s * .34, s * .05); ctx.fillStyle = g; ctx.fill();
+    ctx.fillStyle = '#e8453c'; ctx.fillRect(-s * .08, -s * .06, s * .16, s * .07);
+    rr(ctx, -s * .04, -s * .26, s * .08, s * .07, 2); ctx.fillStyle = '#2f6fd1'; ctx.fill();
+  } else {
+    ctx.rotate(1.35 + v * .15);
+    const base = v === 3 ? ['#1d3f8f', '#3b6fd8', '#9fbaf5'] : ['#8e1a14', '#e8453c', '#ff9b92'];
+    const g = ctx.createLinearGradient(-s * .1, 0, s * .1, 0);
+    g.addColorStop(0, base[0]); g.addColorStop(.35, base[2]); g.addColorStop(.6, base[1]); g.addColorStop(1, base[0]);
+    rr(ctx, -s * .1, -s * .15, s * .2, s * .3, s * .03); ctx.fillStyle = g; ctx.fill();
+    const tg = ctx.createLinearGradient(-s * .1, 0, s * .1, 0); tg.addColorStop(0, '#7d7f86'); tg.addColorStop(.4, '#f1f2f5'); tg.addColorStop(1, '#8a8c93');
+    ctx.fillStyle = tg; ctx.fillRect(-s * .1, -s * .17, s * .2, s * .04); ctx.fillRect(-s * .1, s * .13, s * .2, s * .03);
+  }
+  ctx.restore();
+}
+function drawBag(s){
+  ctx.fillStyle = 'rgba(245,248,250,.75)'; ctx.strokeStyle = 'rgba(180,190,200,.9)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(-s * .16, -s * .12); ctx.quadraticCurveTo(-s * .2, s * .12, -s * .1, s * .18); ctx.quadraticCurveTo(0, s * .22, s * .12, s * .16);
+  ctx.quadraticCurveTo(s * .2, s * .05, s * .15, -s * .12); ctx.lineTo(s * .08, -s * .12); ctx.quadraticCurveTo(s * .06, -s * .22, s * .02, -s * .12);
+  ctx.lineTo(-s * .04, -s * .12); ctx.quadraticCurveTo(-s * .08, -s * .22, -s * .1, -s * .12); ctx.closePath(); ctx.fill(); ctx.stroke();
+}
+function drawMedBalloon(o, s, t){
+  const x = o.x, y = o.y + Math.sin(t * 2 + o.ph) * 5, r = s * .3;
+  ctx.strokeStyle = '#6b4a30'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x - r * .6, y + r * .7); ctx.lineTo(x - r * .25, y + r * 1.35); ctx.moveTo(x + r * .6, y + r * .7); ctx.lineTo(x + r * .25, y + r * 1.35); ctx.stroke();
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, 0, x, y, r * 1.1);
+  g.addColorStop(0, '#ffffff'); g.addColorStop(.7, '#e9edf2'); g.addColorStop(1, '#b6bfca');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x - r * .6, y + r * .7); ctx.bezierCurveTo(x - r * 1.3, y, x - r * .8, y - r * 1.05, x, y - r * 1.05);
+  ctx.bezierCurveTo(x + r * .8, y - r * 1.05, x + r * 1.3, y, x + r * .6, y + r * .7); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = RED; ctx.fillRect(x - r * .1, y - r * .55, r * .2, r * .7); ctx.fillRect(x - r * .35, y - r * .3, r * .7, r * .2);
+  const bg = ctx.createLinearGradient(x - r * .3, 0, x + r * .3, 0); bg.addColorStop(0, '#7a5232'); bg.addColorStop(1, '#a8794e');
+  ctx.fillStyle = bg; ctx.fillRect(x - r * .28, y + r * 1.35, r * .56, r * .4);
+}
+function drawBlimp(x, y, s){
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = '#9aa3b0'; ctx.beginPath(); ctx.moveTo(s * .5, 0); ctx.lineTo(s * .75, -s * .22); ctx.lineTo(s * .75, s * .22); ctx.closePath(); ctx.fill();
+  const g = ctx.createLinearGradient(0, -s * .25, 0, s * .25); g.addColorStop(0, '#ffffff'); g.addColorStop(.6, '#dfe4ea'); g.addColorStop(1, '#a9b1bc');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, s * .6, s * .24, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = RED; ctx.fillRect(-s * .05, -s * .14, s * .1, s * .28); ctx.fillRect(-s * .14, -s * .05, s * .28, s * .1);
+  rr(ctx, -s * .2, s * .24, s * .36, s * .1, 4); ctx.fillStyle = '#4a4f59'; ctx.fill();
+  ctx.fillStyle = '#ffe9a0'; for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.arc(-s * .14 + k * s * .08, s * .29, 2.5, 0, 7); ctx.fill(); }
+  ctx.restore();
+}
+
+function drawAnimal(o, t){
+  const s = isSky() ? skyS() * 1.15 : laneH, a = ANIMALS[o.k];
+  const y = o.y;
+  if (L.world === 'land') softShadow(o.x, y + s * .38, s * .35, s * .07, .35);
+  if (L.world === 'sea') drawLedge(o.x, y + s * .4, s);
+  emoji(a.e, o.x, y, s * (a.boss ? 1.2 : 1.0), a.f);
+  const p = 1 + Math.sin(t * 6) * .08, bx = o.x + s * .45, by = y - s * .5;
+  ctx.save(); ctx.translate(bx, by); ctx.scale(p, p);
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(1, 2, 14, 0, 7); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 14, 0, 7); ctx.fill();
+  ctx.fillStyle = RED; ctx.fillRect(-2.5, -8, 5, 16); ctx.fillRect(-8, -2.5, 16, 5);
+  ctx.restore();
+  if (a.boss) { ctx.font = '700 20px Gaegu, cursive'; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.strokeText('★★★', o.x, y - s * .7); ctx.fillStyle = '#e0a800'; ctx.fillText('★★★', o.x, y - s * .7); }
+}
+function drawLedge(x, y, s){
+  const g = ctx.createLinearGradient(0, y - s * .1, 0, y + s * .25); g.addColorStop(0, '#6c7b84'); g.addColorStop(1, '#2f3c45');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x - s * .55, y + s * .2); ctx.quadraticCurveTo(x - s * .5, y - s * .08, x - s * .2, y - s * .06);
+  ctx.quadraticCurveTo(x + s * .2, y - s * .12, x + s * .55, y + s * .2); ctx.closePath(); ctx.fill();
+  drawBranchCoral(x + s * .38, y + s * .05, s * .3, '#ff9a8b', x | 0);
+}
+function drawThanks(o, t){
+  const s = isSky() ? skyS() * 1.15 : laneH, a = ANIMALS[o.k], y = o.y - Math.abs(Math.sin(t * 7)) * 8;
+  if (L.world === 'sea') drawLedge(o.x, o.y + s * .4, s);
+  emoji(a.e, o.x, y, s, a.f);
+  emoji('🩹', o.x + s * .25, y + s * .2, s * .32);
+  ctx.font = `700 ${Math.max(18, s * .26)}px Gaegu, cursive`;
+  const txt = 'Thank you!', tw = ctx.measureText(txt).width + 20, th = Math.max(30, s * .38);
+  const bx = o.x - tw / 2, by = y - s * .55 - th;
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 2.5;
+  rr(ctx, bx, by, tw, th, 12); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(o.x - 6, by + th - 1); ctx.lineTo(o.x, by + th + 9); ctx.lineTo(o.x + 6, by + th - 1); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(o.x - 6, by + th); ctx.lineTo(o.x, by + th + 9); ctx.lineTo(o.x + 6, by + th); ctx.stroke();
+  ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, o.x, by + th / 2 + 1);
+  for (let i = 0; i < 3; i++) {
+    const k = (t * .8 + i / 3) % 1;
+    ctx.globalAlpha = 1 - k; emoji('❤️', o.x + (i - 1) * s * .3 + Math.sin(t * 3 + i) * 5, y - s * .4 - k * s * .9, s * .22);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawFlag(o){
+  const s = laneH, base = L.world === 'sea' ? trailBot : trailTop + 4;
+  if (L.world === 'sea') {
+    ctx.strokeStyle = 'rgba(230,220,190,.8)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(o.x, base); ctx.lineTo(o.x, trailTop - s * .9); ctx.stroke();
+    const g = ctx.createRadialGradient(o.x - 5, trailTop - s * 1.05, 0, o.x, trailTop - s, s * .2); g.addColorStop(0, '#ffb27a'); g.addColorStop(1, '#d9531e');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(o.x, trailTop - s, s * .18, 0, 7); ctx.fill();
+    ctx.font = '700 22px Gaegu, cursive'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText(L.end === 'Hawaii' ? 'Hawaii!' : 'Finish', o.x, trailTop - s * 1.35);
+    return;
+  }
+  softShadow(o.x, base, s * .2, s * .05, .3);
+  const pg = ctx.createLinearGradient(o.x - 3, 0, o.x + 3, 0); pg.addColorStop(0, '#666'); pg.addColorStop(.5, '#eee'); pg.addColorStop(1, '#555');
+  ctx.fillStyle = pg; ctx.fillRect(o.x - 2.5, base - s * 1.5, 5, s * 1.5);
+  ctx.save(); ctx.translate(o.x + 2, base - s * 1.5);
+  const c = s * .13, now = performance.now() / 300;
+  for (let r = 0; r < 3; r++) for (let k = 0; k < 5; k++) {
+    ctx.fillStyle = (r + k) % 2 ? '#222' : '#fafafa';
+    ctx.fillRect(k * c, r * c + Math.sin(now + k * .8) * c * .2, c + .5, c + .5);
+  }
+  ctx.restore();
+}
+
+// ======================= VEHICLES =======================
+function drawJeep(x, y, t){
+  const s = laneH, w = s * 1.55, h = s * .7;
+  const moving = phase === 'run';
+  ctx.save();
+  ctx.translate(x + (shake > 0 ? rand(-4, 4) : 0), y - h * .1 + (moving ? Math.sin(t * 14) * 1.2 : 0));
+  if (inv > 0 && moving && Math.floor(t * 12) % 2) ctx.globalAlpha = .55;
+  softShadow(0, h * .45, w * .58, h * .12, .45);
+  ctx.beginPath(); ctx.arc(-w * .52, -h * .12, h * .2, 0, 7); ctx.fillStyle = '#1e1d21'; ctx.fill();
+  ctx.beginPath(); ctx.arc(-w * .52, -h * .12, h * .1, 0, 7); ctx.fillStyle = '#9ca0a8'; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-w * .45, -h * .22); ctx.lineTo(-w * .45, -h * .74); ctx.quadraticCurveTo(-w * .45, -h * .82, -w * .37, -h * .82);
+  ctx.lineTo(w * .04, -h * .82); ctx.lineTo(w * .22, -h * .22); ctx.closePath();
+  const cg = ctx.createLinearGradient(0, -h * .82, 0, -h * .22); cg.addColorStop(0, '#ffffff'); cg.addColorStop(1, '#d7dbde');
+  ctx.fillStyle = cg; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1.2; ctx.stroke();
+  const winBack = () => { ctx.beginPath(); ctx.moveTo(-w * .4, -h * .74); ctx.lineTo(-w * .18, -h * .74); ctx.lineTo(-w * .18, -h * .34); ctx.lineTo(-w * .4, -h * .34); ctx.closePath(); };
+  const winFront = () => { ctx.beginPath(); ctx.moveTo(-w * .13, -h * .74); ctx.lineTo(w * .02, -h * .74); ctx.lineTo(w * .15, -h * .34); ctx.lineTo(-w * .13, -h * .34); ctx.closePath(); };
+  for (const [fn, driver] of [[winBack, false], [winFront, true]]) {
+    ctx.save(); fn(); ctx.fillStyle = '#2d4a63'; ctx.fill(); ctx.clip();
+    if (driver) emoji('🧑‍⚕️', -w * .03, -h * .5, h * .36);
+    const wg = ctx.createLinearGradient(0, -h * .74, 0, -h * .34); wg.addColorStop(0, 'rgba(190,230,255,.55)'); wg.addColorStop(1, 'rgba(60,110,150,.35)');
+    ctx.fillStyle = wg; ctx.fillRect(-w * .5, -h, w, h);
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.moveTo(-w * .4, -h * .5); ctx.lineTo(-w * .2, -h * .8); ctx.lineTo(-w * .14, -h * .8); ctx.lineTo(-w * .34, -h * .5); ctx.fill();
+    ctx.restore();
+  }
+  rr(ctx, -w * .5, -h * .26, w, h * .44, h * .1);
+  const bg = ctx.createLinearGradient(0, -h * .26, 0, h * .18);
+  bg.addColorStop(0, '#ffffff'); bg.addColorStop(.5, '#e9ecee'); bg.addColorStop(1, '#a9b0b6');
+  ctx.fillStyle = bg; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1.2; ctx.stroke();
+  const st = ctx.createLinearGradient(0, -h * .06, 0, h * .02); st.addColorStop(0, '#ff6a5e'); st.addColorStop(1, '#c42f26');
+  ctx.fillStyle = st; ctx.fillRect(-w * .49, -h * .06, w * .98, h * .07);
+  ctx.fillStyle = '#c42f26'; ctx.font = `800 ${h * .13}px Nunito, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('VET RESCUE', w * .03, -h * .16);
+  ctx.beginPath(); ctx.arc(-w * .33, -h * .15, h * .09, 0, 7); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = '#c42f26'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = RED; ctx.fillRect(-w * .33 - h * .02, -h * .21, h * .04, h * .12); ctx.fillRect(-w * .33 - h * .06, -h * .17, h * .12, h * .04);
+  ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-w * .15, -h * .7); ctx.lineTo(-w * .15, h * .1); ctx.stroke();
+  ctx.fillStyle = '#8a9096'; ctx.fillRect(-w * .12, -h * .23, w * .06, h * .03);
+  rr(ctx, w * .44, -h * .05, w * .1, h * .17, h * .04); ctx.fillStyle = '#34363b'; ctx.fill();
+  ctx.beginPath(); ctx.arc(w * .47, -h * .16, h * .06, 0, 7); ctx.fillStyle = '#fff6c8'; ctx.fill();
+  const hl = ctx.createRadialGradient(w * .5, -h * .16, 0, w * .5, -h * .16, h * .5);
+  hl.addColorStop(0, 'rgba(255,245,200,.55)'); hl.addColorStop(1, 'rgba(255,245,200,0)');
+  ctx.fillStyle = hl; ctx.beginPath(); ctx.arc(w * .5, -h * .16, h * .5, -.6, .6); ctx.lineTo(w * .5, -h * .16); ctx.fill();
+  ctx.save(); ctx.translate(-w * .2, -h * .86);
+  const pg = ctx.createLinearGradient(-w * .25, -h * .06, w * .2, h * .02); pg.addColorStop(0, '#1b2f66'); pg.addColorStop(.5, '#3557ad'); pg.addColorStop(1, '#162754');
+  rr(ctx, -w * .25, -h * .06, w * .46, h * .07, 2); ctx.fillStyle = pg; ctx.fill(); ctx.strokeStyle = '#c9ccd2'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.strokeStyle = 'rgba(160,190,255,.5)'; ctx.lineWidth = 1;
+  for (let i = 1; i < 6; i++) { const px = -w * .25 + i * w * .077; ctx.beginPath(); ctx.moveTo(px, -h * .06); ctx.lineTo(px, h * .01); ctx.stroke(); }
+  const glint = (t * .5) % 1.6 - .3;
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(-w * .25 + glint * w * .46, -h * .06, w * .03, h * .07);
+  ctx.fillStyle = '#6b6f78'; ctx.fillRect(-w * .2, h * .01, w * .02, h * .04); ctx.fillRect(w * .15, h * .01, w * .02, h * .04);
+  ctx.restore();
+  lightBar(w * .06, -h * .93, w * .16, h * .1, t, h);
+  for (const wx of [-w * .3, w * .3]) { ctx.beginPath(); ctx.arc(wx, h * .16, h * .32, Math.PI, 0); ctx.fillStyle = '#26272b'; ctx.fill(); }
+  const rot = (moving || phase === 'title') ? dist / (h * .28) : 0;
+  for (const wx of [-w * .3, w * .3]) {
+    ctx.save(); ctx.translate(wx, h * .17);
+    const tg = ctx.createRadialGradient(-h * .06, -h * .06, h * .05, 0, 0, h * .29); tg.addColorStop(0, '#3a3a40'); tg.addColorStop(1, '#111114');
+    ctx.beginPath(); ctx.arc(0, 0, h * .29, 0, 7); ctx.fillStyle = tg; ctx.fill();
+    ctx.rotate(rot);
+    ctx.strokeStyle = '#2a2a2f'; ctx.lineWidth = h * .035;
+    for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; ctx.beginPath(); ctx.moveTo(Math.cos(a) * h * .22, Math.sin(a) * h * .22); ctx.lineTo(Math.cos(a) * h * .29, Math.sin(a) * h * .29); ctx.stroke(); }
+    const rg = ctx.createRadialGradient(-h * .04, -h * .04, 0, 0, 0, h * .16); rg.addColorStop(0, '#f3f4f6'); rg.addColorStop(1, '#7d828b');
+    ctx.beginPath(); ctx.arc(0, 0, h * .16, 0, 7); ctx.fillStyle = rg; ctx.fill();
+    ctx.fillStyle = '#5c6068';
+    for (let i = 0; i < 5; i++) { ctx.rotate(Math.PI * 2 / 5); ctx.beginPath(); ctx.arc(h * .09, 0, h * .025, 0, 7); ctx.fill(); }
+    ctx.restore();
+  }
+  if (moving && Math.random() < .5) fx.push({x: x - w * .5, y: y + h * .35, vx: rand(-80, -30), vy: rand(-40, -10), life: rand(.3, .6), c: 'rgba(190,160,120,.5)', r: rand(3, 7), g: 400});
+  ctx.restore();
+}
+function lightBar(x, y, w, hh, t, h){
+  const flash = Math.floor(t * 6) % 2;
+  rr(ctx, x, y, w, hh, 3); ctx.fillStyle = '#2b2d33'; ctx.fill();
+  rr(ctx, x + w * .06, y + hh * .1, w * .4, hh * .8, 2); ctx.fillStyle = flash ? '#ff4a3d' : '#8a2a24'; ctx.fill();
+  rr(ctx, x + w * .53, y + hh * .1, w * .4, hh * .8, 2); ctx.fillStyle = flash ? '#2e4fa0' : '#4f8bff'; ctx.fill();
+  ctx.globalCompositeOperation = 'lighter';
+  const lx = flash ? x + w * .25 : x + w * .75, col = flash ? '255,70,60' : '80,140,255';
+  const lg = ctx.createRadialGradient(lx, y + hh / 2, 0, lx, y + hh / 2, h * .45);
+  lg.addColorStop(0, `rgba(${col},.5)`); lg.addColorStop(1, `rgba(${col},0)`);
+  ctx.fillStyle = lg; ctx.fillRect(lx - h * .45, y + hh / 2 - h * .45, h * .9, h * .9);
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawSub(x, y, t){
+  const s = laneH, w = s * 1.75, h = s * .62;
+  const moving = phase === 'run';
+  ctx.save();
+  ctx.translate(x + (shake > 0 ? rand(-4, 4) : 0), y + Math.sin(t * 2) * 3);
+  ctx.rotate(Math.sin(t * 1.3) * .025);
+  if (inv > 0 && moving && Math.floor(t * 12) % 2) ctx.globalAlpha = .55;
+  // headlight beam
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const beam = ctx.createLinearGradient(w * .5, 0, w * 1.6, 0); beam.addColorStop(0, 'rgba(255,250,200,.35)'); beam.addColorStop(1, 'rgba(255,250,200,0)');
+  ctx.fillStyle = beam; ctx.beginPath(); ctx.moveTo(w * .48, -h * .05); ctx.lineTo(w * 1.6, -h * .55); ctx.lineTo(w * 1.6, h * .5); ctx.lineTo(w * .48, h * .08); ctx.fill();
+  ctx.restore();
+  // propeller
+  ctx.fillStyle = '#5c616b'; ctx.fillRect(-w * .58, -h * .05, w * .08, h * .1);
+  const pr = Math.abs(Math.sin(t * 25));
+  ctx.fillStyle = '#8b919c'; ctx.beginPath(); ctx.ellipse(-w * .6, 0, w * .02, h * .38 * pr + 2, 0, 0, 7); ctx.fill();
+  // tail fins
+  ctx.fillStyle = '#d97a00';
+  ctx.beginPath(); ctx.moveTo(-w * .38, -h * .2); ctx.lineTo(-w * .55, -h * .55); ctx.lineTo(-w * .5, -h * .15); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-w * .38, h * .2); ctx.lineTo(-w * .55, h * .55); ctx.lineTo(-w * .5, h * .15); ctx.fill();
+  // tower + periscope
+  rr(ctx, -w * .2, -h * .82, w * .32, h * .4, h * .1);
+  const tg = ctx.createLinearGradient(0, -h * .82, 0, -h * .42); tg.addColorStop(0, '#ffe37a'); tg.addColorStop(1, '#e8a400');
+  ctx.fillStyle = tg; ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-w * .04, -h * .62, h * .1, 0, 7); ctx.fill();
+  ctx.fillStyle = RED; ctx.fillRect(-w * .04 - h * .02, -h * .7, h * .04, h * .16); ctx.fillRect(-w * .04 - h * .08, -h * .64, h * .16, h * .04);
+  ctx.fillStyle = '#6b707a'; ctx.fillRect(w * .05, -h * 1.12, w * .03, h * .32); ctx.fillRect(w * .05, -h * 1.12, w * .09, h * .07);
+  lightBar(-w * .17, -h * .94, w * .2, h * .12, t, h);
+  // hull
+  const hg = ctx.createLinearGradient(0, -h * .5, 0, h * .5);
+  hg.addColorStop(0, '#fff09a'); hg.addColorStop(.35, '#ffcf33'); hg.addColorStop(.8, '#e09000'); hg.addColorStop(1, '#a86500');
+  ctx.fillStyle = hg; ctx.beginPath(); ctx.ellipse(0, 0, w * .5, h * .5, 0, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,70,0,.4)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(-w * .3, -h * .45); ctx.lineTo(-w * .3, h * .45); ctx.moveTo(w * .25, -h * .44); ctx.lineTo(w * .25, h * .44); ctx.stroke();
+  // three crew portholes
+  const crew = ['🧑‍⚕️', '👩‍🔬', '🧑‍✈️'];
+  for (let i = 0; i < 3; i++) {
+    const px = -w * .2 + i * w * .17, py = -h * .02, pr2 = h * .2;
+    ctx.beginPath(); ctx.arc(px, py, pr2 + 3, 0, 7); ctx.fillStyle = '#8a8f99'; ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.arc(px, py, pr2, 0, 7); ctx.fillStyle = '#1f4f6e'; ctx.fill(); ctx.clip();
+    emoji(crew[i], px, py + pr2 * .15, pr2 * 1.5);
+    ctx.fillStyle = 'rgba(180,230,255,.3)'; ctx.fillRect(px - pr2, py - pr2, pr2 * 2, pr2 * 2);
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.ellipse(px - pr2 * .35, py - pr2 * .4, pr2 * .35, pr2 * .15, -.6, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+  // nose light
+  ctx.beginPath(); ctx.arc(w * .47, -h * .02, h * .07, 0, 7); ctx.fillStyle = '#fffbe0'; ctx.fill();
+  // robotic claw arm for grabbing litter
+  ctx.strokeStyle = '#6b707a'; ctx.lineWidth = h * .07; ctx.lineCap = 'round';
+  const arm = Math.sin(t * 2) * .15;
+  ctx.beginPath(); ctx.moveTo(w * .38, h * .28); ctx.lineTo(w * .55, h * .42 + arm * h); ctx.lineTo(w * .68, h * .38 + arm * h); ctx.stroke();
+  ctx.lineWidth = h * .04;
+  ctx.beginPath(); ctx.moveTo(w * .68, h * .38 + arm * h); ctx.lineTo(w * .76, h * .28 + arm * h); ctx.moveTo(w * .68, h * .38 + arm * h); ctx.lineTo(w * .77, h * .46 + arm * h); ctx.stroke();
+  // bubbles from the propeller
+  if (moving && Math.random() < .5) fx.push({x: x - w * .62, y: y + rand(-6, 6), vx: rand(-90, -40), vy: rand(-50, -10), life: rand(.5, 1), c: 'rgba(230,248,255,.6)', r: rand(2, 5), g: -60});
+  ctx.restore();
+}
+
+function drawChopper(x, y, s, tilt, t, player){
+  ctx.save(); ctx.translate(x + (player && shake > 0 ? rand(-4, 4) : 0), y); ctx.rotate(tilt);
+  if (player && inv > 0 && phase === 'run' && Math.floor(t * 12) % 2) ctx.globalAlpha = .55;
+  ctx.fillStyle = '#b8231b'; ctx.beginPath(); ctx.moveTo(-s * .5, -s * .12); ctx.lineTo(-s * 1.7, -s * .06); ctx.lineTo(-s * 1.7, s * .06); ctx.lineTo(-s * .5, s * .15); ctx.fill();
+  ctx.fillStyle = '#333'; ctx.fillRect(-s * 1.8, -s * .3, s * .1, s * .4);
+  ctx.save(); ctx.translate(-s * 1.75, -s * .1); ctx.rotate(t * 30); ctx.fillStyle = '#444'; ctx.fillRect(-s * .22, -2, s * .44, 4); ctx.restore();
+  const bg = ctx.createLinearGradient(0, -s * .55, 0, s * .55); bg.addColorStop(0, '#ff7a6e'); bg.addColorStop(.5, '#e8453c'); bg.addColorStop(1, '#9e2019');
+  ctx.beginPath(); ctx.ellipse(0, 0, s * .8, s * .55, 0, 0, 7); ctx.fillStyle = bg; ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.ellipse(s * .38, -s * .1, s * .34, s * .3, 0, 0, 7); ctx.clip();
+  const gl = ctx.createLinearGradient(s * .2, -s * .4, s * .7, s * .1); gl.addColorStop(0, '#d6f0ff'); gl.addColorStop(1, '#4b7fa6');
+  ctx.fillStyle = gl; ctx.fillRect(0, -s * .5, s, s);
+  if (player) emoji('🧑‍⚕️', s * .36, -s * .06, s * .36);
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.ellipse(s * .3, -s * .25, s * .15, s * .06, -.5, 0, 7); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-s * .25, s * .05, s * .17, 0, 7); ctx.fill();
+  ctx.fillStyle = RED; ctx.fillRect(-s * .29, -s * .07, s * .08, s * .24); ctx.fillRect(-s * .37, s * .01, s * .24, s * .08);
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-s * .5, s * .7); ctx.lineTo(s * .55, s * .7); ctx.moveTo(-s * .3, s * .5); ctx.lineTo(-s * .3, s * .7); ctx.moveTo(s * .3, s * .5); ctx.lineTo(s * .3, s * .7); ctx.stroke();
+  ctx.fillStyle = '#333'; ctx.fillRect(-3, -s * .75, 6, s * .22);
+  ctx.globalAlpha *= .45; ctx.beginPath(); ctx.ellipse(0, -s * .76, s * 1.6, s * .06, 0, 0, 7); ctx.fillStyle = '#555'; ctx.fill(); ctx.globalAlpha = player && inv > 0 && phase === 'run' && Math.floor(t * 12) % 2 ? .55 : 1;
+  const rw = s * 1.6 * Math.cos(t * 30); ctx.fillStyle = '#222'; ctx.fillRect(-Math.abs(rw), -s * .78, Math.abs(rw) * 2, 4);
+  ctx.restore();
+}
+
+function drawHelper(t){
+  const jx = JX(), p = Math.min(1, helpT / 1.1), ease = 1 - Math.pow(1 - p, 3);
+  const tx = jx + laneH * .2, sx = W + 120, hx = sx + (tx - sx) * ease;
+  let hy2;
+  if (L.world === 'sea') {
+    hy2 = 26;
+    ctx.save(); ctx.translate(hx, hy2);
+    const g = ctx.createLinearGradient(0, -20, 0, 14); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#c8d0da');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-50, -6); ctx.lineTo(54, -6); ctx.lineTo(40, 14); ctx.lineTo(-44, 14); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = RED; ctx.fillRect(-50, -2, 104, 5);
+    rr(ctx, -20, -26, 36, 20, 4); ctx.fillStyle = '#f2f4f7'; ctx.fill(); ctx.fillStyle = '#4b7fa6'; ctx.fillRect(-14, -21, 24, 8);
+    ctx.restore();
+  } else {
+    hy2 = Math.max(130, trailTop - laneH * 2.4) + Math.sin(t * 3) * 6;
+    drawChopper(hx, hy2, laneH * .6, 0, t, false);
+  }
+  if (helpT > 1.2) {
+    const q = Math.min(1, (helpT - 1.2) / .9), by = hy2 + 30 + (jy - hy2 - 50) * q;
+    ctx.save(); ctx.translate(tx, by);
+    rr(ctx, -12, -18, 24, 34, 4);
+    const bat = ctx.createLinearGradient(-12, 0, 12, 0);
+    if (L.world === 'sea') { bat.addColorStop(0, '#2b6f9e'); bat.addColorStop(.4, '#7fd0ff'); bat.addColorStop(1, '#1d5a85'); }
+    else { bat.addColorStop(0, '#e0a800'); bat.addColorStop(.4, '#ffe066'); bat.addColorStop(1, '#c79200'); }
+    ctx.fillStyle = bat; ctx.fill(); ctx.fillStyle = '#333'; ctx.fillRect(-5, -23, 10, 5);
+    ctx.restore();
+  }
+}
+
+// ======================= MAIN DRAW =======================
+function draw(t){
+  if (L.world === 'land') drawLand(t); else if (L.world === 'sea') drawSea(t); else drawSkyScene(t);
+  if (isSky()) {
+    for (const o of objs) if (o.t === 'peak') drawPeak(o);
+    for (const o of objs) if (o.t === 'storm') drawStorm(o, t);
+    for (const o of objs) if (!['peak', 'storm', 'animal', 'thanks'].includes(o.t)) drawObj(o, t);
+    for (const o of objs) if (o.t === 'animal') drawAnimal(o, t);
+    for (const o of objs) if (o.t === 'thanks') drawThanks(o, t);
+    const s = skyS();
+    if (phase === 'title') hy = H * .42;
+    drawChopper(phase === 'title' ? W * .5 : JX(), hy, s, clamp(hvy / (s * 14), -.3, .35), t, true);
+  } else {
+    const list = objs.filter(o => o.lane != null).sort((a, b) => a.y - b.y);
+    for (const o of objs) if (o.t === 'flag') drawFlag(o);
+    for (const o of objs) if (o.t === 'animal') drawAnimal(o, t);
+    for (const o of objs) if (o.t === 'thanks') drawThanks(o, t);
+    const jx = phase === 'title' ? W * .5 : JX();
+    if (phase === 'title') jy = laneY[1];
+    list.filter(o => o.y <= jy + 2).forEach(o => drawObj(o, t));
+    if (L.world === 'sea') drawSub(jx, jy, t); else drawJeep(jx, jy, t);
+    list.filter(o => o.y > jy + 2).forEach(o => drawObj(o, t));
+  }
+  for (const p of fx) { ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 1.5)); ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fillStyle = p.c; ctx.fill(); }
+  ctx.globalAlpha = 1;
+  for (const f of floats) {
+    ctx.globalAlpha = Math.min(1, f.life * 2); ctx.font = '700 24px Gaegu, cursive'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.strokeText(f.txt, f.x, f.y); ctx.fillStyle = f.c; ctx.fillText(f.txt, f.x, f.y);
+  }
+  ctx.globalAlpha = 1;
+  if (L.world === 'sea') {
+    ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1;
+    for (const d of rain) { ctx.beginPath(); ctx.arc(d.x, d.y, 1.5 + d.s * 2.5, 0, 7); ctx.stroke(); }
+  } else if (L.rain && phase !== 'title') {
+    ctx.fillStyle = 'rgba(40,55,75,.14)'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(200,220,240,.55)'; ctx.lineWidth = 1.4; ctx.beginPath();
+    for (const d of rain) { ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - 5, d.y + 16); } ctx.stroke();
+  }
+  if (phase === 'help') drawHelper(t);
+  if (isSky() && phase === 'run' && !started) {
+    ctx.font = '700 34px Gaegu, cursive'; ctx.textAlign = 'center'; ctx.lineWidth = 6; ctx.strokeStyle = '#fff';
+    ctx.strokeText('Tap to fly!', W / 2, H * .62); ctx.fillStyle = INK; ctx.fillText('Tap to fly!', W / 2, H * .62);
+  }
+  const vg = ctx.createRadialGradient(W / 2, H * .55, Math.min(W, H) * .4, W / 2, H * .55, Math.max(W, H) * .8);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, L.world === 'sea' ? 'rgba(0,20,40,.35)' : 'rgba(0,0,0,.2)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+}
+
+let last = performance.now();
+function frame(now){ const dt = Math.min(.05, (now - last) / 1000); last = now; update(dt); draw(now / 1000); requestAnimationFrame(frame); }
+requestAnimationFrame(frame);
+
+// ---------------- input ----------------
+function move(d){ if (phase !== 'run' || isSky()) return; const n = Math.max(0, Math.min(2, lane + d)); if (n !== lane) { lane = n; sfx('tap'); } }
+cv.addEventListener('pointerdown', e => {
+  if (phase !== 'run') return;
+  if (isSky()) return flap();
+  const r = cv.getBoundingClientRect(); move(e.clientY - r.top < jy ? -1 : 1);
+});
+$('#upBtn').addEventListener('pointerdown', e => { e.stopPropagation(); isSky() ? flap() : move(-1); });
+$('#downBtn').addEventListener('pointerdown', e => { e.stopPropagation(); move(1); });
+addEventListener('keydown', e => {
+  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === ' ') { isSky() ? flap() : move(-1); e.preventDefault(); }
+  if (e.key === 'ArrowDown' || e.key === 's') { move(1); e.preventDefault(); }
+  if (e.key === 'Escape' && phase === 'run') pause();
+});
+
+// ---------------- UI ----------------
+const screens = ['titleScr', 'rescueScr', 'doneScr', 'bookScr', 'pauseScr', 'flightScr'];
+function showOnly(id){ screens.forEach(s => $('#' + s).hidden = s !== id); }
+let toastTimer;
+function toast(msg){ const el = $('#toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 3000); }
+
+function updateHud(){
+  $('#bat').innerHTML = Array.from({length: 5}, (_, i) => `<i class="${i < battery ? 'on' : ''}"></i>`).join('');
+  $('#medN').textContent = meds; $('#litN').textContent = litter;
+  $('#aniN').textContent = L.endless ? helped : helped + '/' + L.animals.length;
+}
+
+// ----- questions -----
+function deal(key, arr){
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem('vrt-deck-' + key) || 'null'); } catch (e) {}
+  if (!Array.isArray(d) || !d.length || d.some(i => i >= arr.length)) {
+    d = shuffle(arr.map((_, i) => i));
+  }
+  const i = d.pop();
+  try { localStorage.setItem('vrt-deck-' + key, JSON.stringify(d)); } catch (e) {}
+  return arr[i];
+}
+const recentSums = [];
+const SAY_OP = {'+':' plus ', '−':' take away ', '×':' times '};
+function maths(){
+  for (let tries = 0; tries < 30; tries++) {
+    const q = mathsOnce();
+    if (!recentSums.includes(q.key)) { recentSums.push(q.key); if (recentSums.length > 25) recentSums.shift(); return q; }
+  }
+  return mathsOnce();
+}
+function mathsOnce(){
+  let a, b, op, ans;
+  if (mode === 'easy') {
+    if (Math.random() < .6) { a = ri(1, 8); b = ri(1, 10 - a); op = '+'; ans = a + b; }
+    else { a = ri(3, 10); b = ri(1, a - 1); op = '−'; ans = a - b; }
+  } else {
+    const k = ri(0, 2);
+    if (k === 0) { a = ri(6, 15); b = ri(3, 20 - a); op = '+'; ans = a + b; }
+    else if (k === 1) { a = ri(10, 20); b = ri(2, 9); op = '−'; ans = a - b; }
+    else { a = [2, 3, 5, 10][ri(0, 3)]; b = ri(2, 10); op = '×'; ans = a * b; }
+  }
+  const opts = new Set([ans]);
+  while (opts.size < 3) { const v = ans + [-3, -2, -1, 1, 2, 3, 10, -10][ri(0, 7)]; if (v >= 0) opts.add(v); }
+  return {key:`${a}${op}${b}`, label:'Solve it to open the medicine kit', html:`${a} ${op} ${b} = ?`, done:`${a} ${op} ${b} = ${ans}`, kind:'num', ans:String(ans),
+    choices:shuffle([...opts].map(String)), speak:`What is ${a}${SAY_OP[op]}${b}?`};
+}
+function spelling(){
+  if (mode === 'easy') {
+    const [w, e] = deal('spell-easy', SPELL_EASY), vowels = [...w].map((c, i) => 'aeiou'.includes(c) ? i : -1).filter(i => i >= 0);
+    const i = vowels.length ? pick(vowels) : ri(0, w.length - 1), ans = w[i];
+    const pool = 'aeiou'.includes(ans) ? 'aeiou' : 'bcdfghklmnprstw';
+    const opts = new Set([ans]); while (opts.size < 3) opts.add(pick([...pool]));
+    return {label:'Which letter is missing?', html:`<span class="pic">${e}</span>${w.slice(0, i)}_${w.slice(i + 1)}`, done:`<span class="pic">${e}</span>${w}`,
+      kind:'num', ans, choices:shuffle([...opts]), speak:`Which letter is missing from ${w}?`};
+  }
+  const [w, e, wrong] = deal('spell-hard', SPELL_HARD);
+  return {label:'Which spelling is right?', html:`<span class="pic">${e}</span>`, done:`<span class="pic">${e}</span>${w}`, kind:'word', ans:w, choices:shuffle([w, ...wrong]), speak:`Spell the word: ${w}.`};
+}
+function science(){
+  const [q, a, wrong] = mode === 'easy' ? deal('sci-easy', SCI_EASY) : deal('sci-hard', SCI_HARD);
+  const choices = shuffle([a, ...wrong]);
+  return {label:'Science question', html:q, done:q, kind:'text', ans:a, choices, speak:`${q.replace('…', ' dot dot dot')} Is it: ${choices[0]}, ${choices[1]}, or ${choices[2]}?`};
+}
+const makeQ = () => ({land: maths, sea: spelling, sky: science})[L.world]();
+
+function hearts(){
+  const scene = $('#rScene');
+  for (let i = 0; i < 7; i++) {
+    const h = document.createElement('span'); h.className = 'heart'; h.textContent = '❤️';
+    h.style.left = (15 + Math.random() * 70) + '%'; h.style.animationDelay = (i * .12) + 's';
+    scene.appendChild(h); setTimeout(() => h.remove(), 2200);
+  }
+}
+
+let resc = null;
+function openRescue(k){
+  phase = 'rescue'; const a = ANIMALS[k];
+  resc = {k, need: a.boss ? 3 : 1, got: 0};
+  $('#rScene').className = 'scene ' + L.world;
+  $('#rAni').textContent = a.e; $('#rAni').style.filter = a.f || '';
+  $('#rAniWrap').classList.remove('happy'); $('#rBand').hidden = true; $('#rBubble').hidden = true;
+  $('#rTitle').textContent = `This ${a.n.toLowerCase()} needs a vet!`;
+  $('#rText').textContent = `Oh no, the ${a.n.toLowerCase()} ${a.hurt}` + (a.boss ? ' Answer 3 questions to make it better.' : '');
+  renderBossStars();
+  $('#rFact').hidden = true; $('#rAsk').hidden = true; $('#rHint').textContent = ''; $('#rHint').className = 'hint';
+  const rb = $('#rBtn');
+  if (meds <= 0) {
+    $('#rText').textContent += ' You have no medicine kits left.';
+    rb.hidden = false; rb.textContent = WORLDS[L.world].call;
+    rb.onclick = () => { meds = 1; updateHud(); sfx('ding'); $('#rText').textContent = WORLDS[L.world].friend; rb.hidden = true; ask(); };
+  } else { rb.hidden = true; ask(); }
+  showOnly('rescueScr');
+}
+function renderBossStars(){
+  const el = $('#rStars'); el.hidden = resc.need === 1;
+  el.innerHTML = Array.from({length: resc.need}, (_, i) => `<span class="${i < resc.got ? '' : 'off'}">★</span>`).join('');
+}
+
+function ask(){
+  const q = makeQ(), a = ANIMALS[resc.k];
+  $('#rAsk').hidden = false; $('#rLabel').textContent = q.label;
+  $('#rSpeak').onclick = () => say(q.speak || q.label);
+  $('#rQ').innerHTML = q.html; $('#rQ').className = 'qbox' + (q.kind === 'text' ? ' text' : '');
+  const box = $('#rChoices'); box.innerHTML = ''; box.className = 'choices ' + (q.kind === 'num' ? '' : q.kind);
+  $('#rHint').textContent = ''; $('#rHint').className = 'hint';
+  q.choices.forEach((v, idx) => {
+    const b = document.createElement('button'); b.textContent = v; b.id = 'choice-' + idx;
+    b.onclick = () => {
+      if (v === q.ans) {
+        b.classList.add('right'); [...box.children].forEach(c => c.disabled = true);
+        $('#rQ').innerHTML = q.kind === 'text' ? q.html + '<br><span style="color:var(--green)">' + q.ans + '</span>' : q.done;
+        resc.got++; renderBossStars(); sfx('yay');
+        if (resc.got < resc.need) {
+          $('#rHint').className = 'hint good'; $('#rHint').textContent = `Well done! ${resc.need - resc.got} more to go.`;
+          setTimeout(ask, 1100); return;
+        }
+        meds--; helped++; saved.add(resc.k); persist(); updateHud();
+        $('#rHint').textContent = '';
+        $('#rTitle').textContent = `You helped the ${a.n.toLowerCase()}!`;
+        $('#rText').textContent = 'All patched up and added to your Rescue Book.';
+        $('#rBand').hidden = false; $('#rAniWrap').classList.add('happy');
+        $('#rBubble').textContent = a.thanks; $('#rBubble').hidden = false;
+        hearts(); setTimeout(() => say(a.thanks), 450);
+        $('#rFactTxt').textContent = a.fact; $('#rFact').hidden = false;
+        const rb = $('#rBtn'); rb.hidden = false; rb.textContent = isSky() ? 'Keep flying' : L.world === 'sea' ? 'Keep diving' : 'Back to the trail';
+        const k = resc.k;
+        rb.onclick = () => {
+          showOnly(null); phase = 'run'; inv = 1.2;
+          if (isSky()) { skyCount++; hvy = 0; objs.push({t: 'thanks', k, x: JX() + skyS() * 1.4, y: objs.find(o => o.t === 'peak' && Math.abs(o.x - JX() - skyS() * 1.4) < skyS() * 3)?.top - skyS() * .45 || hy, life: 2.6}); }
+          else objs.push({t: 'thanks', k, x: JX() + laneH * 1.1, y: trailTop - laneH * .3, life: 2.6});
+        };
+      } else {
+        b.classList.add('wrong'); b.disabled = true; sfx('nope');
+        $('#rHint').textContent = 'Nearly! Have another go.';
+      }
+    };
+    box.appendChild(b);
+  });
+}
+
+function levelDone(){
+  phase = 'done';
+  const stars = 1 + (helped === L.animals.length ? 1 : 0) + (litter >= 8 ? 1 : 0);
+  const titles = {'Forest Trail':'Forest Trail complete!', 'Muddy Hills':'Muddy Hills complete!', 'Mount Evans':'You made it to the top of Mount Evans!',
+    'Coral Reef':'You crossed the Coral Reef!', 'Voyage to Hawaii':'Aloha! You made it to Hawaii!'};
+  $('#dTitle').textContent = titles[L.name] || `${L.name} complete!`;
+  $('#dStars').innerHTML = [0, 1, 2].map(i => `<span class="${i < stars ? '' : 'off'}">★</span>`).join('');
+  $('#dAni').textContent = helped; $('#dLit').textContent = litter; $('#dHeli').textContent = helpCalls;
+  $('#dMsg').textContent = litter >= 8 ? 'You left it cleaner than you found it. The animals say thank you!' : 'Tip: pick up 8 pieces of litter to earn the planet star.';
+  const before = unlocked; unlocked = Math.max(unlocked, levelIdx + 1); persist();
+  const next = LEVELS[levelIdx + 1];
+  const u = $('#dUnlock'); u.hidden = true;
+  if (next && unlocked > before && next.world !== L.world) { u.hidden = false; u.textContent = `New world unlocked: ${WORLDS[next.world].icon} ${WORLDS[next.world].title}!`; }
+  $('#dNext').textContent = next ? (next.world !== L.world ? `Go to ${WORLDS[next.world].title}` : 'Next level') : 'Menu';
+  $('#dNext').onclick = () => next ? startLevel(levelIdx + 1) : toTitle();
+  sfx('yay'); showOnly('doneScr');
+}
+
+function flightOver(){
+  phase = 'flightover';
+  const m = Math.floor(dist / 10), rec = m > best;
+  if (rec) best = m; persist();
+  $('#fDist').textContent = m; $('#fBest').textContent = best; $('#fAni').textContent = helped;
+  $('#fRecord').hidden = !rec || m === 0;
+  $('#fMsg').textContent = 'Out of power! The medical rocket guided your helicopter safely home.';
+  showOnly('flightScr');
+}
+$('#fAgain').onclick = () => startLevel(LEVELS.length - 1);
+$('#fMenu').onclick = toTitle;
+
+function toTitle(){
+  if (isSky() && phase !== 'title' && phase !== 'flightover') { const m = Math.floor(dist / 10); if (m > best) { best = m; persist(); } }
+  phase = 'title'; objs = []; rain = []; L = LEVELS[0]; buildSprites();
+  ['hud', 'prog', 'ctrl'].forEach(id => $('#' + id).hidden = true);
+  document.querySelectorAll('.poo').forEach(p => p.remove());
+  renderWorlds(); showOnly('titleScr');
+}
+function pause(){ phase = 'paused'; showOnly('pauseScr'); }
+let pausedFrom = 'run';
+$('#pauseBtn').onclick = () => { if (phase === 'run') pause(); };
+$('#pResume').onclick = () => { showOnly(null); phase = 'run'; };
+$('#pQuit').onclick = toTitle;
+$('#dMenu').onclick = toTitle;
+
+function poo(){
+  const el = document.createElement('div'); el.className = 'poo';
+  el.style.left = rand(15, 70) + '%'; el.style.top = rand(25, 55) + '%';
+  el.innerHTML = '<i style="left:20px;top:20px;width:60px;height:46px"></i><i style="left:8px;top:40px;width:26px;height:22px"></i><i style="left:70px;top:14px;width:22px;height:20px"></i><i style="left:44px;top:58px;width:18px;height:24px"></i><em>Bird poo! Tap to wipe</em>';
+  el.onpointerdown = e => { e.stopPropagation(); el.remove(); sfx('tap'); };
+  $('#pooLayer').appendChild(el);
+  if (!tips.poo) { tips.poo = 1; toast('Splat! A bird got your window. Tap it to wipe it off.'); }
+  setTimeout(() => el.remove(), 5000);
+}
+
+// ----- title / world picker -----
+function renderWorlds(){
+  const wrap = $('#worlds'); wrap.innerHTML = '';
+  for (const wk of ['land', 'sea', 'sky']) {
+    const Wd = WORLDS[wk], idxs = LEVELS.map((l, i) => l.world === wk ? i : -1).filter(i => i >= 0);
+    const open = unlocked >= idxs[0];
+    const div = document.createElement('div'); div.className = `world ${wk}${open ? '' : ' locked'}`;
+    const prevWorld = {sea:'all 3 land trails', sky:'both sea levels'}[wk];
+    div.innerHTML = `<div class="whead"><b>${Wd.icon} ${Wd.title}</b><span>${Wd.subject} questions</span></div>` +
+      (open ? '' : `<span class="muted">🔒 Finish ${prevWorld} to unlock</span>`);
+    const lv = document.createElement('div'); lv.className = 'lvls';
+    idxs.forEach(i => {
+      const b = document.createElement('button'); b.id = 'lvl-' + i; b.disabled = unlocked < i;
+      const l = LEVELS[i];
+      b.innerHTML = (unlocked < i ? '🔒 ' : '') + l.name + `<small>${l.endless ? (best ? `Longest flight: ${best} m` : 'Endless flight') : l.animals.length + ' animals'}</small>`;
+      b.onclick = () => { sfx('tap'); startLevel(i); };
+      lv.appendChild(b);
+    });
+    if (open) div.appendChild(lv);
+    wrap.appendChild(div);
+  }
+}
+function setMode(m){ mode = m; persist(); document.querySelectorAll('#modeSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m)); }
+document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+setMode(mode);
+loadVoices();
+$('#voiceSel').onchange = e => { voiceName = e.target.value; try { localStorage.setItem('vrt-voice', voiceName); } catch (er) {} say('Thank you, Doctor! You are a star!'); };
+$('#voiceTest').onclick = () => say('Hoo hoo! Thank you for flying all the way up here to save me!');
+$('#muteBtn').onclick = () => { muted = !muted; $('#muteBtn').textContent = 'Sound: ' + (muted ? 'off' : 'on'); if (muted) try { speechSynthesis.cancel(); } catch (e) {} };
+// grown-up shortcut: tap the title 5 times to unlock everything
+let logoTaps = 0, logoTimer;
+$('#logo').addEventListener('click', () => {
+  logoTaps++; clearTimeout(logoTimer); logoTimer = setTimeout(() => logoTaps = 0, 1500);
+  if (logoTaps >= 5) { logoTaps = 0; unlocked = LEVELS.length - 1; persist(); renderWorlds(); toast('Grown-up mode: every world is unlocked.'); }
+});
+renderWorlds();
+
+// ----- rescue book -----
+function renderBook(){
+  const keys = Object.keys(ANIMALS);
+  $('#bookCount').textContent = `${keys.filter(k => saved.has(k)).length} of ${keys.length} animals helped`;
+  $('#bookGrid').innerHTML = ['land', 'sea', 'sky'].map(wk =>
+    `<div class="bookHead">${WORLDS[wk].icon} ${WORLDS[wk].title}</div><div class="book">` +
+    keys.filter(k => ANIMALS[k].w === wk).map(k => {
+      const a = ANIMALS[k], got = saved.has(k);
+      return `<div class="card ${got ? '' : 'locked'}"><button data-k="${k}" ${got ? '' : 'disabled'} aria-label="${got ? a.n : 'Not found yet'}"><span class="e" style="${a.f && got ? 'filter:' + a.f : ''}">${a.e}</span></button><small>${got ? a.n : '???'}</small></div>`;
+    }).join('') + '</div>').join('');
+  $('#bookFact').hidden = true;
+  document.querySelectorAll('#bookGrid button').forEach(b => b.onclick = () => {
+    const a = ANIMALS[b.dataset.k]; $('#bookFactName').textContent = a.n; $('#bookFactTxt').textContent = a.thanks + ' ' + a.fact; $('#bookFact').hidden = false;
+  });
+}
+$('#bookBtn').onclick = () => { renderBook(); showOnly('bookScr'); };
+$('#bookClose').onclick = () => showOnly('titleScr');
+</script>
