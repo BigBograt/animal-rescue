@@ -579,9 +579,25 @@ function shade(hex, a){
 const DPR = () => Math.min(2, window.devicePixelRatio || 1);
 function mk(w, h, fn){ const c = document.createElement('canvas'), d = DPR(); c.width = Math.ceil(w * d); c.height = Math.ceil(h * d); const x = c.getContext('2d'); x.scale(d, d); fn(x, w, h); c.w = w; c.h = h; return c; }
 function rr(c, x, y, w, h, r){ c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+// Emoji are rasterised once into a cached sprite and scaled, because iOS Safari draws nothing for large
+// colour-emoji glyphs on canvas. Each sprite is checked for pixels, falling back to smaller glyph sizes.
+const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif', emojiCache = {};
+function emojiSprite(e){
+  if (emojiCache[e]) return emojiCache[e];
+  for (const fs of [128, 96, 64, 40]) {
+    const c = document.createElement('canvas'); c.width = c.height = Math.ceil(fs * 1.3);
+    const x = c.getContext('2d', {willReadFrequently: true});
+    x.font = `${fs}px ${EMOJI_FONT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(e, c.width / 2, c.height / 2);
+    const d = x.getImageData(0, 0, c.width, c.height).data;
+    for (let i = 3; i < d.length; i += 16) if (d[i]) return emojiCache[e] = {c, fs};
+  }
+  return null; // font not ready yet; try again next frame
+}
 function emoji(e, x, y, size, filter){
-  ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  if (filter) ctx.filter = filter; ctx.fillText(e, x, y); if (filter) ctx.filter = 'none';
+  ctx.font = `${size}px ${EMOJI_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; // later text draws rely on these
+  const sp = emojiSprite(e); if (!sp) return;
+  const w = sp.c.width * size / sp.fs;
+  if (filter) ctx.filter = filter; ctx.drawImage(sp.c, x - w / 2, y - w / 2, w, w); if (filter) ctx.filter = 'none';
 }
 function softShadow(x, y, rx, ry, a = .3){
   ctx.save(); ctx.translate(x, y); ctx.scale(1, ry / rx);
@@ -1677,8 +1693,10 @@ function draw(t){
 }
 
 let last = performance.now();
-function frame(now){ const dt = Math.min(.05, (now - last) / 1000); last = now; update(dt); draw(now / 1000); requestAnimationFrame(frame); }
+// Schedule first so one bad frame can't stop the loop; skip drawing until sprites exist (canvas was 0×0 at load).
+function frame(now){ requestAnimationFrame(frame); const dt = Math.min(.05, (now - last) / 1000); last = now; if (!SP.clouds) return; update(dt); draw(now / 1000); }
 requestAnimationFrame(frame);
+for (const k in ANIMALS) emojiSprite(ANIMALS[k].e);
 
 // ---------------- input ----------------
 function move(d){ if (phase !== 'run' || isSky()) return; const n = Math.max(0, Math.min(2, lane + d)); if (n !== lane) { lane = n; sfx('tap'); } }
