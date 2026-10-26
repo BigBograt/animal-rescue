@@ -802,7 +802,7 @@ function buildSprites(){
 
 // ---------------- state ----------------
 let phase = 'title';
-let dist = 0, objs = [], battery = 4, meds = 1, litter = 0, helped = 0, helpCalls = 0;
+let dist = 0, objs = [], battery = 4, meds = 1, litter = 0, litterOut = 0, helped = 0, helpCalls = 0;
 let aIdx = 0, spawnT = 400, slow = 0, inv = 0, shake = 0, flagOut = false, helpT = 0, pooT = 8, tips = {};
 let fx = [], floats = [], rain = [];
 // sky
@@ -811,7 +811,7 @@ resize(); addEventListener('resize', resize);
 
 function startLevel(i){
   levelIdx = i; L = LEVELS[i]; buildSprites();
-  dist = 0; objs = []; lane = 1; jy = laneY[1]; battery = 4; meds = 1; litter = 0; helped = 0; helpCalls = 0;
+  dist = 0; objs = []; lane = 1; jy = laneY[1]; battery = 4; meds = 1; litter = 0; litterOut = 0; helped = 0; helpCalls = 0;
   aIdx = 0; spawnT = laneH * 4; slow = 0; inv = 0; shake = 0; flagOut = false; pooT = 6; fx = []; floats = [];
   rain = (L.rain || L.world === 'sea') ? Array.from({length: L.world === 'sea' ? 40 : 90}, () => ({x: rand(0, W), y: rand(0, H), s: rand(.6, 1.2)})) : [];
   const Wd = WORLDS[L.world];
@@ -840,6 +840,7 @@ function spawn(){
   if (t === 'med' && meds >= 3) t = 'litter';
   if ((t === 'sun' || t === 'air') && battery >= 5) t = 'litter';
   const ln = ri(0, 2);
+  if (t === 'litter') litterOut++;
   objs.push({t, lane: ln, x: W + 50, y: laneY[ln], v: ri(0, 3), ph: Math.random() * 6});
   const hazards = L.world === 'sea' ? ['barrel', 'jelly', 'net'] : ['rock', 'mud'];
   if (hazards.includes(t) && Math.random() < (mode === 'easy' ? .12 : .25)) {
@@ -1901,13 +1902,16 @@ function ask(){
 
 function levelDone(){
   phase = 'done';
-  const stars = 1 + (helped === L.animals.length ? 1 : 0) + (litter >= 8 ? 1 : 0);
+  // Litter is random and depends on screen size, so the planet star asks for 3 in 4 of the pieces that actually appeared.
+  const litterNeed = Math.ceil(litterOut * .75), clean = litter >= litterNeed;
+  const stars = 1 + (helped === L.animals.length ? 1 : 0) + (clean ? 1 : 0);
   const titles = {'Forest Trail':'Forest Trail complete!', 'Muddy Hills':'Muddy Hills complete!', 'Mount Evans':'You made it to the top of Mount Evans!',
     'Coral Reef':'You crossed the Coral Reef!', 'Voyage to Hawaii':'Aloha! You made it to Hawaii!'};
   $('#dTitle').textContent = titles[L.name] || `${L.name} complete!`;
   $('#dStars').innerHTML = [0, 1, 2].map(i => `<span class="${i < stars ? '' : 'off'}">★</span>`).join('');
   $('#dAni').textContent = helped; $('#dLit').textContent = litter; $('#dHeli').textContent = helpCalls;
-  $('#dMsg').textContent = litter >= 8 ? 'You left it cleaner than you found it. The animals say thank you!' : 'Tip: pick up 8 pieces of litter to earn the planet star.';
+  $('#dMsg').textContent = clean ? 'You left it cleaner than you found it. The animals say thank you!'
+    : `You picked up ${litter} of ${litterOut} pieces of litter. Pick up ${litterNeed} to earn the planet star.`;
   const before = unlocked; unlocked = Math.max(unlocked, levelIdx + 1); persist();
   const next = LEVELS[levelIdx + 1];
   const u = $('#dUnlock'); u.hidden = true;
