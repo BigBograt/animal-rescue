@@ -2090,7 +2090,7 @@ function ask(){
         $('#rText').textContent = 'All patched up and added to your Rescue Book.';
         $('#rBand').hidden = false; $('#rAniWrap').classList.add('happy');
         $('#rBubble').textContent = a.thanks; $('#rBubble').hidden = false;
-        hearts(); setTimeout(() => say(a.thanks), 450);
+        hearts(); setTimeout(() => say('Did you know? ' + a.fact), 450);
         $('#rFactTxt').textContent = a.fact; $('#rFact').hidden = false;
         const rb = $('#rBtn'); rb.hidden = false; rb.textContent = isSky() ? 'Keep flying' : L.world === 'sea' ? 'Keep diving' : 'Back to the trail';
         const k = resc.k;
