@@ -150,6 +150,7 @@ p{margin:0;line-height:1.45;font-size:16px}
 .nick{display:flex;flex-direction:column;gap:8px;background:#f1f8fd;border-radius:14px;padding:10px}
 .nickRow{display:flex;gap:8px}
 .nickRow select{flex:1 1 0;min-width:0;border:2.5px solid var(--ink);border-radius:12px;padding:8px;font:inherit;font-weight:800;font-size:15px;background:var(--paper);color:var(--ink)}
+.nickRow select.num{flex:0 0 64px}
 .nickRow .speak{font-size:20px;padding:4px 10px}
 .lb{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;text-align:left;min-height:120px}
 .lb li{display:flex;align-items:center;gap:10px;border:2px solid var(--ink);border-radius:12px;padding:6px 10px;background:var(--paper);font-weight:800}
@@ -292,6 +293,7 @@ p{margin:0;line-height:1.45;font-size:16px}
         <div class="nickRow">
           <select id="nAdj" aria-label="First word"></select>
           <select id="nAni" aria-label="Animal"></select>
+          <select id="nNum" aria-label="Number" class="num"></select>
           <button class="speak" id="nDice" aria-label="Pick a random name">🎲</button>
         </div>
         <button class="btn go" id="nSave">Use this name</button>
@@ -547,12 +549,22 @@ try {
   totalHelped = Math.max(saved.size, +(localStorage.getItem('vrt-total') || 0));
   sent = JSON.parse(localStorage.getItem('vrt-sent') || 'null') || sent;
 } catch (e) {}
+// The nickname is also kept in a cookie, so it survives if the browser drops it from localStorage.
+const NICK_COOKIE = 'vrt-nick';
+function saveNickCookie(){
+  try { document.cookie = `${NICK_COOKIE}=${encodeURIComponent(JSON.stringify(nick))}; max-age=${400 * 86400}; path=/; SameSite=Lax`; } catch (e) {}
+}
+if (!nick) try {
+  const m = document.cookie.match(new RegExp(`(?:^|; )${NICK_COOKIE}=([^;]*)`));
+  if (m) nick = JSON.parse(decodeURIComponent(m[1]));
+} catch (e) {}
+if (nick) saveNickCookie();
 function persist(){ try {
   localStorage.setItem('vrt-book', JSON.stringify([...saved])); localStorage.setItem('vrt-mode', mode);
   localStorage.setItem('vrt-unlocked', unlocked); localStorage.setItem('vrt-best', best);
   localStorage.setItem('vrt-nick', JSON.stringify(nick)); localStorage.setItem('vrt-total', totalHelped);
   localStorage.setItem('vrt-sent', JSON.stringify(sent));
-} catch (e) {} }
+} catch (e) {} if (nick) saveNickCookie(); }
 
 // ---------------- sound ----------------
 let AC = null;
@@ -2130,7 +2142,7 @@ $('#fAgain').onclick = () => startLevel(LEVELS.length - 1);
 $('#fMenu').onclick = toTitle;
 
 function toTitle(){
-  if (isSky() && phase !== 'title' && phase !== 'flightover') { const m = Math.floor(dist / 10); if (m > best) { best = m; persist(); } }
+  if (isSky() && phase !== 'title' && phase !== 'flightover') { const m = Math.floor(dist / 10); if (m > best) { best = m; persist(); syncScores(); } }
   phase = 'title'; objs = []; rain = []; L = LEVELS[0]; buildSprites();
   ['hud', 'prog', 'ctrl'].forEach(id => $('#' + id).hidden = true);
   document.querySelectorAll('.poo').forEach(p => p.remove());
@@ -2256,18 +2268,19 @@ async function renderBoard(){
 function fillNick(){
   const opt = a => a.map(w => `<option>${w}</option>`).join('');
   $('#nAdj').innerHTML = opt(NICK_ADJ); $('#nAni').innerHTML = opt(NICK_ANI);
-  const n = nick || {adjective: pick(NICK_ADJ), animal: pick(NICK_ANI)};
-  $('#nAdj').value = n.adjective; $('#nAni').value = n.animal;
+  $('#nNum').innerHTML = opt(Array.from({length: 99}, (_, i) => i + 1));
+  const n = nick || {adjective: pick(NICK_ADJ), animal: pick(NICK_ANI), num: ri(1, 99)};
+  $('#nAdj').value = n.adjective; $('#nAni').value = n.animal; $('#nNum').value = n.num;
   $('#nNote').textContent = nick ? `You are ${nickName(nick)}. Your best scores go on the board automatically.`
-    : 'Pick a name to put your scores on the board. Only this name and your scores are shared.';
+    : 'Pick a name to put your scores on the board. Had a name before? Pick the same words and number to carry on.';
   $('#nSave').textContent = nick ? 'Change name' : 'Use this name';
 }
-$('#nDice').onclick = () => { sfx('tap'); $('#nAdj').value = pick(NICK_ADJ); $('#nAni').value = pick(NICK_ANI); };
+$('#nDice').onclick = () => { sfx('tap'); $('#nAdj').value = pick(NICK_ADJ); $('#nAni').value = pick(NICK_ANI); $('#nNum').value = ri(1, 99); };
 $('#nSave').onclick = async () => {
-  const adjective = $('#nAdj').value, animal = $('#nAni').value;
-  if (nick && nick.adjective === adjective && nick.animal === animal) return toast(`You are already ${nickName(nick)}.`);
-  // the number tells apart players who pick the same two words
-  nick = {adjective, animal, num: ri(1, 99)}; sent = {flight: 0, animals: 0}; persist();
+  const adjective = $('#nAdj').value, animal = $('#nAni').value, num = +$('#nNum').value;
+  if (nick && nick.adjective === adjective && nick.animal === animal && nick.num === num) return toast(`You are already ${nickName(nick)}.`);
+  // the number tells apart players who pick the same two words; picking an old name again carries on with it
+  nick = {adjective, animal, num}; sent = {flight: 0, animals: 0}; persist();
   sfx('yay'); fillNick(); toast(`Hello, ${nickName(nick)}!`);
   await syncScores(); renderBoard();
 };
