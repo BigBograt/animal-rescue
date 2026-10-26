@@ -146,6 +146,19 @@ p{margin:0;line-height:1.45;font-size:16px}
 .unlock{background:#fff6d6;border:2.5px solid var(--ink);border-radius:14px;padding:10px;font-weight:800}
 .record{display:inline-block;background:var(--red);color:#fff;border-radius:999px;padding:3px 12px;font-weight:800;font-size:14px}
 
+/* Leaderboard */
+.nick{display:flex;flex-direction:column;gap:8px;background:#f1f8fd;border-radius:14px;padding:10px}
+.nickRow{display:flex;gap:8px}
+.nickRow select{flex:1 1 0;min-width:0;border:2.5px solid var(--ink);border-radius:12px;padding:8px;font:inherit;font-weight:800;font-size:15px;background:var(--paper);color:var(--ink)}
+.nickRow .speak{font-size:20px;padding:4px 10px}
+.lb{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;text-align:left;min-height:120px}
+.lb li{display:flex;align-items:center;gap:10px;border:2px solid var(--ink);border-radius:12px;padding:6px 10px;background:var(--paper);font-weight:800}
+.lb li.me{background:#fff6d6}
+.lb li i{font-style:normal;font-family:var(--display);font-size:22px;width:30px;text-align:center;font-variant-numeric:tabular-nums}
+.lb li span{flex:1;min-width:0;overflow-wrap:anywhere}
+.lb li b{font-variant-numeric:tabular-nums}
+.lb .msg{justify-content:center;border-style:dashed;color:var(--muted);font-weight:700}
+
 #toast{position:absolute;left:50%;top:84px;translate:-50% 0;max-width:min(92%,420px);background:var(--paper);border:2.5px solid var(--ink);
   border-radius:14px;padding:8px 14px;font-weight:800;font-size:15px;text-align:center;box-shadow:2px 3px 0 var(--ink);pointer-events:none;
   transition:opacity .25s;opacity:0}
@@ -189,6 +202,7 @@ p{margin:0;line-height:1.45;font-size:16px}
       <div class="worlds" id="worlds"></div>
       <div class="row">
         <button class="btn alt" id="bookBtn">Rescue Book</button>
+        <button class="btn alt" id="boardBtn">Leaderboard</button>
         <button class="btn alt" id="muteBtn">Sound: on</button>
       </div>
       <div class="voiceRow">
@@ -266,6 +280,29 @@ p{margin:0;line-height:1.45;font-size:16px}
       <div id="bookGrid"></div>
       <div class="fact" id="bookFact" hidden><b id="bookFactName"></b><p id="bookFactTxt"></p></div>
       <button class="btn" id="bookClose">Close</button>
+    </div>
+  </div>
+
+  <!-- Leaderboard -->
+  <div class="overlay" id="boardScr" hidden>
+    <div class="panel">
+      <h2>Leaderboard</h2>
+      <div class="nick">
+        <div class="label">Your rescue name</div>
+        <div class="nickRow">
+          <select id="nAdj" aria-label="First word"></select>
+          <select id="nAni" aria-label="Animal"></select>
+          <button class="speak" id="nDice" aria-label="Pick a random name">🎲</button>
+        </div>
+        <button class="btn go" id="nSave">Use this name</button>
+        <p class="muted" id="nNote">Pick a name to put your scores on the board. Only this name and your scores are shared.</p>
+      </div>
+      <div class="seg" id="boardSeg">
+        <button data-board="flight" aria-pressed="true">Longest flight</button>
+        <button data-board="animals" aria-pressed="false">Animals helped</button>
+      </div>
+      <ol class="lb" id="lbList"></ol>
+      <button class="btn" id="boardClose">Close</button>
     </div>
   </div>
 
@@ -499,15 +536,22 @@ const SCI_HARD = [
 
 // ---------------- storage (per-viewer convenience) ----------------
 let saved = new Set(), mode = 'easy', muted = false, unlocked = 0, best = 0;
+// leaderboard: chosen nickname, lifetime animals helped, and what has already been sent to the board
+let nick = null, totalHelped = 0, sent = {flight: 0, animals: 0};
 try {
   saved = new Set(JSON.parse(localStorage.getItem('vrt-book') || '[]'));
   mode = localStorage.getItem('vrt-mode') || 'easy';
   unlocked = +(localStorage.getItem('vrt-unlocked') || 0);
   best = +(localStorage.getItem('vrt-best') || 0);
+  nick = JSON.parse(localStorage.getItem('vrt-nick') || 'null');
+  totalHelped = Math.max(saved.size, +(localStorage.getItem('vrt-total') || 0));
+  sent = JSON.parse(localStorage.getItem('vrt-sent') || 'null') || sent;
 } catch (e) {}
 function persist(){ try {
   localStorage.setItem('vrt-book', JSON.stringify([...saved])); localStorage.setItem('vrt-mode', mode);
   localStorage.setItem('vrt-unlocked', unlocked); localStorage.setItem('vrt-best', best);
+  localStorage.setItem('vrt-nick', JSON.stringify(nick)); localStorage.setItem('vrt-total', totalHelped);
+  localStorage.setItem('vrt-sent', JSON.stringify(sent));
 } catch (e) {} }
 
 // ---------------- sound ----------------
@@ -1714,7 +1758,7 @@ addEventListener('keydown', e => {
 });
 
 // ---------------- UI ----------------
-const screens = ['titleScr', 'rescueScr', 'doneScr', 'bookScr', 'pauseScr', 'flightScr'];
+const screens = ['titleScr', 'rescueScr', 'doneScr', 'bookScr', 'pauseScr', 'flightScr', 'boardScr'];
 function showOnly(id){ screens.forEach(s => $('#' + s).hidden = s !== id); }
 let toastTimer;
 function toast(msg){ const el = $('#toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 3000); }
@@ -1831,7 +1875,7 @@ function ask(){
           $('#rHint').className = 'hint good'; $('#rHint').textContent = `Well done! ${resc.need - resc.got} more to go.`;
           setTimeout(ask, 1100); return;
         }
-        meds--; helped++; saved.add(resc.k); persist(); updateHud();
+        meds--; helped++; totalHelped++; saved.add(resc.k); persist(); updateHud();
         $('#rHint').textContent = '';
         $('#rTitle').textContent = `You helped the ${a.n.toLowerCase()}!`;
         $('#rText').textContent = 'All patched up and added to your Rescue Book.';
@@ -1870,7 +1914,7 @@ function levelDone(){
   if (next && unlocked > before && next.world !== L.world) { u.hidden = false; u.textContent = `New world unlocked: ${WORLDS[next.world].icon} ${WORLDS[next.world].title}!`; }
   $('#dNext').textContent = next ? (next.world !== L.world ? `Go to ${WORLDS[next.world].title}` : 'Next level') : 'Menu';
   $('#dNext').onclick = () => next ? startLevel(levelIdx + 1) : toTitle();
-  sfx('yay'); showOnly('doneScr');
+  sfx('yay'); showOnly('doneScr'); syncScores();
 }
 
 function flightOver(){
@@ -1880,7 +1924,7 @@ function flightOver(){
   $('#fDist').textContent = m; $('#fBest').textContent = best; $('#fAni').textContent = helped;
   $('#fRecord').hidden = !rec || m === 0;
   $('#fMsg').textContent = 'Out of power! The medical rocket guided your helicopter safely home.';
-  showOnly('flightScr');
+  showOnly('flightScr'); syncScores();
 }
 $('#fAgain').onclick = () => startLevel(LEVELS.length - 1);
 $('#fMenu').onclick = toTitle;
@@ -1963,4 +2007,72 @@ function renderBook(){
 }
 $('#bookBtn').onclick = () => { renderBook(); showOnly('bookScr'); };
 $('#bookClose').onclick = () => showOnly('titleScr');
+
+// ----- leaderboard (Supabase) -----
+// The publishable key is meant to be public; the database only allows reading scores and adding new ones,
+// and only accepts nicknames built from these word lists (keep them in sync with the table's checks).
+const SB_URL = 'https://pmzkdedfslgkjfjnuvpr.supabase.co', SB_KEY = 'sb_publishable_NZLjUvXQSrbWXNPR-e_cng_OyZ1ikMj';
+const NICK_ADJ = ['Brave','Speedy','Happy','Clever','Kind','Sunny','Gentle','Mighty','Jolly','Lucky','Bright','Swift','Bouncy','Friendly','Daring','Cheerful'];
+const NICK_ANI = ['Otter','Owl','Fox','Deer','Hedgehog','Badger','Turtle','Dolphin','Seal','Crab','Octopus','Eagle','Sparrow','Magpie','Hare','Bear'];
+const BOARD_MAX = {flight: 50000, animals: 500};
+const nickName = n => `${n.adjective} ${n.animal} ${n.num}`;
+let board = 'flight', syncing = false;
+
+async function sb(path, opts = {}){
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, {...opts, headers: {apikey: SB_KEY, 'Content-Type': 'application/json', ...opts.headers}});
+  if (!r.ok) throw new Error(r.status + ' ' + await r.text());
+  return r.status === 204 || r.status === 201 ? null : r.json();
+}
+// Send any personal best that the board hasn't seen yet. Safe to call often; failures retry next time.
+async function syncScores(){
+  if (!nick || syncing) return;
+  syncing = true;
+  try {
+    for (const [b, v] of [['flight', best], ['animals', totalHelped]]) {
+      const score = Math.min(v, BOARD_MAX[b]);
+      if (score <= (sent[b] || 0)) continue;
+      await sb('scores', {method: 'POST', headers: {Prefer: 'return=minimal'}, body: JSON.stringify({board: b, ...nick, score})});
+      sent[b] = score; persist();
+    }
+  } catch (e) {} finally { syncing = false; }
+}
+async function renderBoard(){
+  const list = $('#lbList'), msg = t => list.innerHTML = `<li class="msg">${t}</li>`;
+  document.querySelectorAll('#boardSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.board === board));
+  msg('Loading…');
+  try {
+    const rows = await sb(`leaderboard?select=nickname,best&board=eq.${board}&order=best.desc,last_played.asc&limit=20`);
+    if (!rows.length) return msg('No scores yet. Be the first!');
+    const mine = nick && nickName(nick), unit = board === 'flight' ? ' m' : '';
+    list.innerHTML = '';
+    rows.forEach((r, i) => {
+      const li = document.createElement('li'); if (r.nickname === mine) li.className = 'me';
+      li.innerHTML = `<i>${['🥇','🥈','🥉'][i] || i + 1}</i><span></span><b></b>`;
+      li.querySelector('span').textContent = r.nickname; li.querySelector('b').textContent = r.best + unit;
+      list.appendChild(li);
+    });
+  } catch (e) { msg('Couldn’t reach the leaderboard. Check the internet and try again.'); }
+}
+function fillNick(){
+  const opt = a => a.map(w => `<option>${w}</option>`).join('');
+  $('#nAdj').innerHTML = opt(NICK_ADJ); $('#nAni').innerHTML = opt(NICK_ANI);
+  const n = nick || {adjective: pick(NICK_ADJ), animal: pick(NICK_ANI)};
+  $('#nAdj').value = n.adjective; $('#nAni').value = n.animal;
+  $('#nNote').textContent = nick ? `You are ${nickName(nick)}. Your best scores go on the board automatically.`
+    : 'Pick a name to put your scores on the board. Only this name and your scores are shared.';
+  $('#nSave').textContent = nick ? 'Change name' : 'Use this name';
+}
+$('#nDice').onclick = () => { sfx('tap'); $('#nAdj').value = pick(NICK_ADJ); $('#nAni').value = pick(NICK_ANI); };
+$('#nSave').onclick = async () => {
+  const adjective = $('#nAdj').value, animal = $('#nAni').value;
+  if (nick && nick.adjective === adjective && nick.animal === animal) return toast(`You are already ${nickName(nick)}.`);
+  // the number tells apart players who pick the same two words
+  nick = {adjective, animal, num: ri(1, 99)}; sent = {flight: 0, animals: 0}; persist();
+  sfx('yay'); fillNick(); toast(`Hello, ${nickName(nick)}!`);
+  await syncScores(); renderBoard();
+};
+document.querySelectorAll('#boardSeg button').forEach(b => b.onclick = () => { board = b.dataset.board; sfx('tap'); renderBoard(); });
+$('#boardBtn').onclick = () => { fillNick(); $('#lbList').innerHTML = '<li class="msg">Loading…</li>'; showOnly('boardScr'); syncScores().then(renderBoard); };
+$('#boardClose').onclick = () => showOnly('titleScr');
+syncScores();
 </script>
